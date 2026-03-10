@@ -86,14 +86,14 @@ The model architecture below is standard and is included only to make the subseq
 Our methodological contribution in this section is the introduction of \emph{Bloat/Compress/Change} ratios of gradients, which are designed to expose the training-time mediator between attention sinks and massive activations.
 
 \subsection{Pre-Norm Transformers}
-We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs \textcolor{red}{Ref of RMS Norm}\citep{touvron2023llama,su2024rope,shazeer2020gluvariants}. Let $\bm H^\ell = (\bm h_1^\ell,\dots,\bm h_T^\ell)^T \in \mathbb{R}^{T \times d_{\mathrm{model}}}$ denote the hidden states of $T$ tokens at layer $\ell$. Then the update of the Transformer layer can be written by
+We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs \citep{touvron2023llama,zhang2019rmsnorm,su2024rope,shazeer2020gluvariants}. Let $\bm H^\ell = (\bm h_1^\ell,\dots,\bm h_T^\ell)^T \in \mathbb{R}^{T \times d_{\mathrm{model}}}$ denote the hidden states of $T$ tokens at layer $\ell$. Then the update of the Transformer layer can be written by
 \begin{equation}
     \begin{aligned}
         \bm H^{\ell+\frac{1}{2}} &= \bm H^{\ell} + \mathrm{Attention}\left(\mathrm{RMSNorm}\left(\bm H^{\ell}\right)\right), \\
         \bm H^{\ell+1} &= \bm H^{\ell+\frac{1}{2}} + \mathrm{MLP}\left(\mathrm{RMSNorm}\left(\bm H^{\ell+\frac{1}{2}}\right)\right).
     \end{aligned}
 \end{equation}
-As we mentioned above, the MLP block is defaultly implemented by SwiGLU, which is a variant of GLU \citep{shazeer2017glu} and is widely used in recent LLMs \citep{touvron2023llama, zhao2024gemini}. RMSNorm is a simpler alternative to LayerNorm that has been widely adopted in pre-norm Transformers \citep{zhang2019rmsnorm, xiong2020layernorm}. The word ``pre-norm'' means that the normalization is applied before the residual addition, which is the opposite of the original post-norm design \citep{vaswani2017attention}. RMSNorm is applied token-wise, so the normalization of each token depends only on its own activation $\bm h_i$:
+As we mentioned above, the MLP block is defaultly implemented by SwiGLU \citep{dauphin2017languagemodeling,shazeer2020gluvariants}. RMSNorm is a simpler alternative to LayerNorm that has been widely adopted in pre-norm Transformers \citep{zhang2019rmsnorm,xiong2020layernorm}. The word ``pre-norm'' means that the normalization is applied before the residual addition, which is the opposite of the original post-norm design \citep{vaswani2017attention}. RMSNorm is applied token-wise, so the normalization of each token depends only on its own activation $\bm h_i$:
 \[
     \mathrm{RMSNorm}(\bm h_i) = \bm\gamma \odot \frac{\bm h_i}{\rms(\bm h_i)},\quad \rms(\bm x) = \frac{1}{\sqrt d} \|\bm x\|^2, \quad \text{where } \bm\gamma \in \mathbb{R}^d \text{ is a learnable vector}.
 \] 
@@ -110,7 +110,7 @@ where $R_t \in \mathbb{R}^{d\times d}$ is the RoPE rotation matrix. Then under c
 \end{equation}
 
 \subsection{Metrics for Attention Sinks and Massive Activations}
-We next define the forward observables to track attention sinks (AS) and massive activations (MA). Different prior papers used slightly different diagnostics \citep{sun2024massive,guo2024activedormant,sun2026spike} and here we want to choose continuous statistics that are convenient for theory and are stable across training.
+We next define the forward observables to track attention sinks (AS) and massive activations (MA). Different prior papers have used slightly different diagnostics \citep{sun2024massive,gu2025when} and here we want to choose continuous statistics that are convenient for theory and are stable across training.
 
 \paragraph{Attention sink.}
 For a candidate sink position $s$ (typically the first token), thresholded criteria are often used to count sink-like behavior and the Sink Rate is often defined as
@@ -304,7 +304,7 @@ Increasing the input norm reduces the backpropagated gradient norm.
 This is the bridge from GS to MA. In a pre-norm Transformer, large token activation is not primarily useful because it changes the \emph{forward} map through magnitude; it is useful because it changes the \emph{backward} map through normalization. This is consistent with why pre-norm is favored for stable optimization \citep{xiong2020layernorm}.
 
 \section{Empirical evidence for \texorpdfstring{$AS \rightarrow GS \rightarrow MA$}{AS -> GS -> MA}}
-We train Llama-like decoder-only Transformers with pre-norm RMSNorm and SwiGLU at 0.1B and 0.3B scale. The familiar forward phenomena are reproduced: token~0 develops strong AS in mid layers; MA peaks are created by the previous-layer MLP; and sink tokens exhibit smaller value norms (VSD), consistent with prior observations \citep{sun2024massive, guo2024activedormant}. We then measure the backward side directly.
+We train Llama-like decoder-only Transformers with pre-norm RMSNorm and SwiGLU at 0.1B and 0.3B scale. The familiar forward phenomena are reproduced: token~0 develops strong AS in mid layers; MA peaks are created by the previous-layer MLP; and sink tokens exhibit smaller value norms (VSD), consistent with prior observations \citep{sun2024massive, guo2025activedormant}. We then measure the backward side directly.
 
 Figure~\ref{fig:qv-grad} shows token-wise Q/V gradient magnitudes averaged over layers during training. The value gradient is sharply concentrated at token~0, whereas the Q-side does not show a comparable token~0 advantage. This is exactly the row-vs-column asymmetry predicted above.
 
