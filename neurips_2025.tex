@@ -245,6 +245,92 @@ This is the basis for our AS $\rightarrow$ GS $\rightarrow$ MA account.
 \section{Attention Sink is also Gradient Sink}
 %这一节主要讲解观察+理论：为什么AS必然是GS
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/line_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/line_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea1_compress.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea3_Bloat.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea4_Change.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea1_compress.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea3_Bloat.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea4_Change.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em1_compress.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em3_Bloat.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em4_Change.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em1_compress.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em3_Bloat.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em4_Change.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/V_norm_compare.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/extreme_steps.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/V_norm_compare.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/extreme_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.23\linewidth]{pics/01B_baseline/AS_mass_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/01B_baseline/AS_eps_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/01B_baseline/MA_x_out_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/01B_baseline/MA_mlp_out_compare.pdf}
+    \includegraphics[width=0.046\linewidth]{pics/01B_baseline/extreme_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.23\linewidth]{pics/03B_baseline/AS_mass_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/03B_baseline/AS_eps_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/03B_baseline/MA_x_out_compare.pdf}
+    \includegraphics[width=0.23\linewidth]{pics/03B_baseline/MA_mlp_out_compare.pdf}
+    \includegraphics[width=0.046\linewidth]{pics/03B_baseline/extreme_steps.pdf}
+    \caption{Main results with a shared colorbar.}
+\end{figure}
+
+
 \subsection{Gradient Sink at the initial token}
 %通过实验观察，发现首token的梯度异常巨大
 
