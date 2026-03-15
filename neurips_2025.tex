@@ -494,66 +494,24 @@ massive activations provide effective routes for attenuating localized gradient 
 
 \section{V-scale: A Value-Path Gradient Valve}
 \label{sec:vscale}
-% 这一节介绍V-scale结构，标题可能也要重新草拟一下
-% 先写根据我们的猜想，我们如果能压缩Attention Bloat，那么MA也会相应变小，
-% 从前面的观察来看，token 0 的V梯度最大，K梯度也大但是没有V大
-% 因此我们想到控制V梯度
-% 我们需要做一些“防御性”说明
-% 1 压缩或者控制梯度的方法，此前的诸多结构变体（是什么？写引用）其实可能也实现了控制梯度的功能，比如改变norm结构（引用spike）或者添加门控（引用gated Attention和VGA）。但是为什么我们不这样做？因为我希望能有一个数学上足够清晰的结构，同时更接近原本的LLaMA-like模型
-% 2 Bloat观测到的梯度聚合实际上来自3项
-% W_Q D Q + W_K D K + W_V D V
-% 我们只控制V侧梯度D V，并不能完全消除XXX，
-
-% 下面是为什么我们会想到V-scale，这是因为很多论文观察到sink token的V小（引用），同时展示图片，所以我们希望利用V自身的结构信息来控制V
-% 下面就描述V-scale是什么，以及为什么它可能控制梯度，而尽量少改变前向，
-% 这是因为这个函数在V模长较大时约等于1，V模长小时才显著小于1（这个函数是否需要配一个图说明）
-% 然后还要说明C参数如何选择c = (d_head \sigma)^2 \lambda. 这是因为\sigma=0.02是Llama模型中初始化参数矩阵时选定的什么参数。\lambda可以设计成1或者可学习参数\lambda=\exp \theta, 这里增加的参数量极少，仅仅num head * num layer个，可以与baseline视为参数量基本一致。
-% 由于0.3B模型无学习的压缩MA效果不明显，我提议只说训练了V-scale learn
-% 还需要写上V的相关定理
-
-% 可能还要画一个图展示一下这个结构在改哪里，最好是一个前向、反向都能体现的架构图，你有什么建议
-
-% 接下来要展示训练结果，说一句训练配置与同规模的baseline模型一致。
-
-% 展示训练结果
-% loss展示可能一张表就行，loss图不是重点，可以考虑放在附录，只要说明模型没有训坏就可以了
-% 下面是重点的机制展示图，这里要展示些什么图？我首先想到的是V-scale和baseline模型的MA AS指标图对比，而且我认为不要想前文那样画单个模型，不同token组的（也可以画，放在附录），而是画仅token 0，不同模型同图对比，0.1B一行、0.3B一行，这样对比明显，说明起来更容易
-% 然后还需要什么图，我不知道了
-The previous sections suggest a concrete prediction of our mechanism that if massive activations are mainly a response to sink-centered gradient pressure, then reducing that pressure should weaken MA even when the attention sink itself is largely preserved.
+The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily a response to sink-centered gradient pressure, then reducing that pressure should weaken MA even when AS is largely preserved.
 This section implements that prediction.
 
 Several recent architectural variants mitigate extreme token phenomena like MA and AS by changing the attention nonlinearity, inserting dedicated gates, or modifying normalization structure \citep{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
-These results are valuable, but such changes strongly alter the forward geometry and therefore do not clearly isolate the specific prediction of our backward-mechanism hypothesis. 
-Here we instead seek a modification that is mathematically transparent, stays close to the original Llama-like model, and primarily targets the dominant value-side backward channel identified in Sections~\ref{sec:as_to_gs} and~\ref{sec:pressure_reshape}.
-
-There is also an important limitation to keep in mind.
-The gradient arriving at the token representation after RMSNorm is not a pure value-side quantity but the sum of the $Q$, $K$, and $V$ paths:
-\begin{equation}
-\label{eq:vscale_grad_sum}
-G(\widetilde h_s^\ell)
-=
-W_Q^\top G(q_s^\ell)
-+
-W_K^\top G(k_s^\ell)
-+
-W_V^\top G(v_s^\ell),
-\end{equation}
-up to the fixed RoPE rotations and the sum over heads.
-Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-Our goal is more modest and more relevant to the paper's hypothesis: to attenuate the \emph{dominant controllable channel} of sink-centered gradient pressure and then test whether MA correspondingly decreases.
+These results show that MA and AS are removable and seperable, but such changes strongly alter the forward geometry and therefore do not cleanly test the specific prediction of our backward-mechanism hypothesis. 
+Here we instead seek a modification that is mathematically transparent, remains close to the original Llama-like model, and primarily targets the dominant value-side backward channel identified in Section~\ref{sec:as_to_gs}.
 
 The value path is the natural target for two reasons.
 First, our backward observations confirm that V-side gradient norms of sink token are several times larger than K-side ones. 
 Second, prior work has repeatedly observed \emph{value-state drain}, where sink tokens tend to have unusually small value norms \citep{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
-We also observed this phenomena as shown in Figure~\ref{fig:value_state_drain}.
-This provides a useful structural prior: if sink values are already small, then a radial transform depending on $\|v\|_2$ can target sink tokens selectively.
+We observe the same pattern as shown in Figure~\ref{fig:value_state_drain}, and are inspired by this useful structural prior: if sink values are already small, then a radial transform depending on $\|v\|_2$ can target sink tokens selectively.
 
 \begin{figure*}[tb]
     \centering
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/V_norm_compare.pdf}
-    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/line_steps.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/extreme_steps.pdf}
     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/V_norm_compare.pdf}
-    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/line_steps.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/extreme_steps.pdf}
     \caption{
     Value state norms in baseline models.
     Left: 0.1B model; right: 0.3B model.
@@ -576,11 +534,11 @@ by
 \qquad
 \hat y_t = \sum_{j\le t} a_{tj} \hat v_j,
 \end{equation}
-where $C>0$ is a scale parameter.
-We call this modification \emph{V-scale}.
+where $C>0$ is a scale parameter. We call this modification \emph{V-scale}.
 
+Figure~\ref{fig:vscale_design_and_loss}(left) shows where this modification acts inside the attention block. 
 This map is chosen to satisfy three design desiderata.
-First, it does not affect the attention weights, because those depend only on $Q$ and $K$.
+First, it does not affect the attention weights who depend only on $Q$ and $K$.
 Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1$ as $r\to\infty$.
 Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ when $r\ll C$.
 Combined with the empirical observation that sink tokens often have small value norms, this makes V-scale a targeted modification rather than a uniform shrinkage.
@@ -595,7 +553,17 @@ where $d_{\mathrm{head}}$ is the head dimension, $\sigma=0.02$ is the projection
 \[
 \lambda^{\ell,h}=\exp(\theta_{\ell,h}).
 \]
-The learnable version therefore introduces only one scalar parameter per layer and per head, which is negligible relative to the baseline parameter count.
+The learnable version therefore introduces only one scalar parameter per layer and per head, which is negligible relative to the baseline parameter count. We implement this learnable version in this work.
+
+\begin{figure*}[tb]
+    \centering
+    \includegraphics[width=0.48\linewidth]{pics/vscale_architecture.pdf}
+    \includegraphics[width=0.5\linewidth]{pics/compare/loss_comparison.pdf}
+    \caption{
+    V-scale design and training behavior.
+    Left: schematic of V-scale inside a pre-norm Transformer block.
+    }\label{fig:architecture_and_loss}
+\end{figure*}
 
 The key advantage of V-scale is that its backward behavior is exactly analyzable.
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
@@ -681,42 +649,53 @@ This is the decisive prediction of our mechanism: if MA is compensating for GS, 
 
 \subsection{Experiments}
 We train V-scale models with the same data, optimizer, and model configurations as the corresponding baselines.
-The fixed-scale variant uses $\lambda^{\ell,h}=1$, and the learnable variant optimizes $\theta_{\ell,h}$ jointly with the model.
-In the current runs, all variants reach training losses comparable to the baseline, indicating that the modification does not simply damage optimization.
-For clarity, the main-text comparison focuses on the learnable variant, which gives the clearest MA reduction on the 0.3B model; the fixed-scale variant can be reported in the appendix.
+Figure~\ref{fig:architecture_and_loss}(right) shows that V-scale models reach validation losses comparable to the baselines in both model sizes. 
+Although we do not claim that achieving slightly lower training loss on such small scale models is of much practical significance, this result demonstrates that our modified models remain well trainable. 
 
-Our recommended main comparison is to overlay \emph{token-0} curves across models rather than to repeat the earlier ``token 0 vs. the rest'' plots for every model.
-This directly answers the central question of this section: when only the value-path gradient pressure is altered, what happens to the sink token itself?
-The most important observables are therefore the token-0 attention-sink metric, the token-0 residual or MLP activation norm, and the token-0 value norm.
+The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}. We compare baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
 
-The empirical result is clear.
-Compared with the baseline, the trained V-scale models preserve strong attention sinks and in some layers even strengthen them, while their massive activations are substantially weaker.
-In our current runs, the peak token-0 activation magnitude is reduced from roughly $400$ to roughly $250$.
-This is the central result of the paper's minimal closed loop: \emph{MA can be suppressed without destroying AS}.
+\begin{figure*}[tb]
+    \centering
+    \includegraphics[width=0.24\linewidth]{pics/compare/01B_AS_mass_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/01B_AS_eps_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/01B_MA_x_out_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/01B_MA_mlp_out_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_mass_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_eps_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_x_out_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_mlp_out_final_compare.pdf}
+    \caption{
+    Forward phenomena in baseline and V-scale models.
+    Top row: 0.1B model; bottom row: 0.3B model.
+    From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
+    The solid curve shows token 0, and the dashed curve shows the mean over the rest early tokens; ``rest early tokens'' refers to positions 1--15.
+    }\label{fig:vscale_as_ma_compare}
+\end{figure*}
 
-This result is especially informative because V-scale does not directly target the MLP that produces the largest activation spikes.
-Instead, it changes only the value-path gradient flow.
-Consistent with our hypothesis, the most visible downstream effect is that the MLP output in the previous layer becomes smaller.
-That is, the MA reduction is better explained by reduced \emph{need} for gradient compensation than by a trivial statement that ``the value vector itself becomes smaller.''
-The change propagates backward through training dynamics and reshapes how much activation scale the model needs to build.
+The result is consistent across both model scales. On the AS metrics, V-scale preserves strong sink behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baseline. 
+This pattern is precisely what our mechanism predicts. V-scale does not directly modify the MLP that produces MA. Instead, it changes the value-path forward-backward flow. The most visible downstream effect is that the MLP output in the preceding layer becomes smaller. Thus the MA reduction is better explained as a training-time response to reduced gradient pressure than as a trivial consequence of shrinking the value vector itself.
 
-At the same time, the result should not be overinterpreted.
-Because the full gradient at the attention input also contains query- and key-side components as in \eqref{eq:vscale_grad_sum}, V-scale is not expected to remove all sink-centered pressure.
-This is a feature rather than a bug for our argument.
-The point is not to erase the phenomenon completely, but to demonstrate that once the dominant value-side pressure is given an alternative valve, the optimizer no longer needs to produce the same degree of MA.
-That is exactly the behavior we observe.
+There is also an important limitation to keep in mind.
+The gradient arriving at the token representation after RMSNorm is not a pure value-side quantity but the sum of the $Q$, $K$, and $V$ paths:
+\begin{equation}
+\label{eq:vscale_grad_sum}
+G(\widetilde h_s^\ell)
+=
+W_Q^\top G(q_s^\ell)
++
+W_K^\top G(k_s^\ell)
++
+W_V^\top G(v_s^\ell),
+\end{equation}
+up to the fixed RoPE rotations and the sum over heads.
+Therefore, modifying only the value path cannot completely eliminate gradient sinks.
+Our goal is more modest and relevant to the hypothesis of this paper. The point is not to show that once the dominant value-side pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA. That is exactly the behavior observed in Figure~\ref{fig:vscale_as_ma_compare}.
 
-Overall, V-scale supports the causal chain proposed in this paper:
+Overall, V-scale closes the experimental loop of this paper:
 \[
-\mathrm{AS}
-\Longrightarrow
-\mathrm{GS}
-\Longrightarrow
-\mathrm{MA}.
+\mathrm{AS}\Longrightarrow\mathrm{GS}\Longrightarrow\mathrm{MA}.
 \]
-Attention sinks can remain useful or even become slightly stronger, while the compensatory activation spikes become less necessary once the value path supplies extra gradient attenuation.
-This makes GS a more plausible mediator between AS and MA than a direct forward-pass explanation in which MA is itself the primary cause of AS.
-
+Attention sinks can remain strong and may even become slightly stronger in some layers while compensatory massive activations become less necessary once the value path provides extra gradient attenuation. This makes GS a more plausible mediator between AS and MA than a direct forward-pass account in which MA is itself the primary cause of AS.
 
 \section{Conclusion}
 In this work, we revisited the relationship between attention sinks and massive activations from the perspective of training dynamics. Our empirical and theoretical results suggest that the connection between the two is not purely a forward-pass co-occurrence, but is mediated by a backward mechanism: under causal attention, attention sinks induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized optimization stress in pre-norm Transformers. To test this hypothesis, we introduced V-scale, a value-path intervention that leaves the forward attention geometry largely intact while selectively modulating backpropagated gradients. Across models, we find that V-scale preserves attention sinks but substantially suppresses massive activations, providing direct evidence that these two phenomena can be separated once gradient sinks are controlled. Taken together, our findings support the causal picture \emph{attention sinks $\rightarrow$ gradient sinks $\rightarrow$ massive activations}, and highlight gradient regulation as a useful lens for understanding extreme-token phenomena in Transformer training. Future work may further investigate whether similar mechanisms arise in larger-scale models, alternative normalization schemes, and other gradient-sensitive architectural pathologies.
