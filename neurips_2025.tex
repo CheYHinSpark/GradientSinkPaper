@@ -51,41 +51,34 @@
 \maketitle
 
 \begin{abstract}
-Attention sinks and massive activations are two recurring and closely related phenomena in Transformer models. Existing studies have largely focused on the forward pass, making it unclear whether the connection between attention sinks and massive activations is direct or mediated by a training-time mechanism. We study this question from the perspective of backpropagation. Empirically and theoretically, we show that under causal mask, attention sinks induce a pronounced concentration of gradients, which we term gradient sinks. Furthermore, in pre-norm architectures with RMSNorm, massive activations can be understood as an adaptive response to this localized gradient pressure during training. To test this hypothesis, we introduce V-scale, a modification that adjusts value-path backpropagated gradients while keeping forward behavior largely unchanged. In pretrained models with V-scale, attention sinks are preserved whereas massive activations are suppressed. These findings support the view that gradient sink is a key training-time mediator linking attention sinks and massive activations.
+Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. Existing studies have largely focused on the forward pass, making it unclear whether the connection between attention sinks and massive activations is direct or mediated by a training-time mechanism. We study this question from the perspective of backpropagation. Empirically and theoretically, we show that under causal mask, attention sinks induce a pronounced concentration of gradients, which we term \emph{gradient sinks}. Furthermore, in pre-norm architectures with RMSNorm, massive activations can be understood as an adaptive response to this localized gradient pressure during training. To test this hypothesis, we introduce V-scale, a modification that adjusts value-path backpropagated gradients. In pretrained V-scale models, attention sinks are preserved whereas massive activations are suppressed. These results support the interpretation that gradient sink is a key training-time mediator linking attention sinks and massive activations.
 \end{abstract}
 
 \section{Introduction}
-% 1. 引入背景与概念介绍
-% 2. 当前工作介绍
-% 3. 为什么当前工作不能解决我的问题
-% 4. 我做了什么，提出了什么
-% 5. 我如何验证
-% 6. 提出本文的contribution
 Understanding mechanisms of Transformer-based large language models (LLMs) becomes increasingly important. 
 Two prominent and frequently co-occurring phenomena in LLMs are \emph{attention sinks} (AS), where a small number of tokens attract disproportionate attention mass \citep{xiao2024streamingllm,gu2025when,guo2025activedormant}, and \emph{massive activations} (MA), where activation magnitudes become unusually large on a small set of tokens and features \citep{bondarenko2023quantizable,sun2024massive,an2025systematic}. They are most commonly observed on the first token especially in pre-norm LLMs.
 
 These phenomena have attracted lots of research interest. 
-First, a line of work treats AS as exploitable structure that can support efficient or long-context inference \citep{xiao2024streamingllm,su2025kvsink,liu2026sinktrack} and fine-tuning \citep{liu2025all,fu2026attention,liu2026surgery}. 
-Second, structural work studies how to migrate or reshape these phenomena by attention or normalization variants \citep{henry2020qknorm,miller2023attention,kaul2025from,zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}. 
-Third, mechanistic studies seek to explain their functions and origins. AS is mainstreamly explained as a way to implement ``no-ops'' attention heads that contribute little to the current token \citep{gu2025when,barbero2025why,guo2025activedormant}, driven by the sum-to-one constraint of the Softmax operator. Meanwhile, MA is often described to help create sink formation \citep{sun2024massive,su2026unveiling,queipo-de-llano2026attention}. 
+A line of work treats AS as exploitable structure for long-context inference and fine-tuning \citep{xiao2024streamingllm,su2025kvsink,liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery} and structural work studies how to migrate or reshape these phenomena by attention or normalization variants \citep{henry2020qknorm,miller2023attention,kaul2025from,zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}. 
+Particularly, mechanistic studies seek to explain their functions and origins. AS is mainstreamly explained as a way to implement ``no-ops'' attention heads that contribute little to the current token \citep{gu2025when,barbero2025why,guo2025activedormant}, driven by the sum-to-one constraint of the Softmax operator. Meanwhile, MA is often described to help create sink formation \citep{sun2024massive,su2026unveiling,queipo-de-llano2026attention}. 
 Together, these prior studies have established that AS and MA are functionally correlated structural artifacts that play important roles in LLMs, even as they impose severe numerical outliers. 
 Yet one question remains unresolved:
 
 \emph{Why should optimization learn such massive token activations at all?}
 
-This question is especially nontrivial for modern pre-norm Transformers. In this architecture, both attention and MLP sublayers operate on normalized inputs \citep{zhang2019rmsnorm,xiong2020layernorm,touvron2023llama}. Locally, the forward computation depends much more strongly on representation direction than on raw token norm. This makes MA appears somewhat puzzling: if the relevant directions are aligned, enlarging the magnitude does not obviously seem necessary for sink formation. Existing experimental evidence also remains limited, since most interventions in the literature modify trained models post hoc by changing MLP outputs or token activations and then observe joint changes in AS and MA. While informative, such interventions do not constitute sufficiently clean causal evidence for their relationship, because both magnitude and direction are perturbed at the same time. Thus it remains unclear whether a distinct training-time mediator lies between the two phenomena. Recent works that examine training dynamics \citep{gallegofeliciano2026hiddendynamics,queipo-de-llano2026attention} provide valuable additional perspective, but still do not directly isolate the token-wise backward mechanism linking sink structure to activation growth. Likewise, showing that AS and MA can be decoupled by architectural changes \citep{sun2026spike} does not by itself explain why they are learned to be coupled in standard architectures.
+This question is especially nontrivial for modern pre-norm Transformers. In this architecture, both attention and MLP sublayers operate on normalized inputs \citep{zhang2019rmsnorm,xiong2020layernorm,touvron2023llama}. Locally, the forward computation depends much more strongly on representation direction than on raw token norm. This makes MA appears somewhat unnecessary and puzzling. Most existing interventions in the literature modify trained models post hoc by changing MLP outputs or token activations and then observe joint changes in AS and MA. While informative, such interventions do not constitute sufficiently clean causal evidence for their relationship, because both magnitude and direction are perturbed at the same time. Recent works that examine training dynamics \citep{gallegofeliciano2026hiddendynamics,queipo-de-llano2026attention} provide valuable additional perspective, but still do not directly isolate the backward mechanism linking sink structure to activation growth. Likewise, showing that AS and MA can be decoupled by architectural changes \citep{sun2026spike} does not by itself explain why they are learned to be coupled in standard architectures.
 
-This paper study this problem from the perspective of backpropagation. Our starting point is that, under causal mask, sink tokens not only accumulate attention mass in the forward computation, but also accumulate gradients during backpropagation. As later tokens place attention weights on the sink token, their gradients aggregate there mainly through the value path. We call this effect a \emph{gradient sink} (GS). In pre-norm Transformers with RMSNorm, such localized gradient pressure can be partially offset because RMSNorm attenuates backpropagated gradients approximately in inverse proportion to activation norm. This suggests a different interpretation of massive activations: rather than being the direct mechanistic cause of attention sinks, they may emerge as an adaptive response to the gradient imbalance induced by gradient sinks. The mechanism we posit is therefore
+This paper study this problem from the perspective of backpropagation. Our starting point is that, under causal mask, sink tokens should not only accumulate attention mass in the forward computation, but also accumulate gradients during backpropagation. As later tokens place attention weights on the first token, their gradients aggregate there. We call this effect a \emph{gradient sink} (GS). In pre-norm Transformers with RMSNorm, such localized gradient pressure can be partially offset because RMSNorm attenuates backpropagated gradients approximately in inverse proportion to activation norm. This suggests a different interpretation of massive activations: rather than being the direct mechanistic cause of attention sinks, they may emerge as an adaptive response to the gradient imbalance. This leads to the mediator picture that we posit in this paper:
 \[
-\mathrm{AS} \Longrightarrow \mathrm{GS} \Longrightarrow \mathrm{MA}.
+\mathrm{Attention\;Sink} \Longrightarrow \mathrm{Gradient\;Sink} \Longrightarrow \mathrm{Massive\;Activation}.
 \]
-We support this view with complementary evidence. Empirically, we track gradient concentration during training and show that it is strongest on the first token and concentrated in attention blocks, while RMSNorm-mediated gradient compression scales almost inversely with activation norms. Theoretically, we show that under causal mask, sink structure naturally creates gradient aggregation on sink tokens, with the value path contributing most strongly. Finally, we test the mechanism by intervening backward path. Our proposed \emph{V-scale} acts as a value-path gradient valve: it largely preserves forward attention behavior while attenuating value-side backpropagation of sink tokens. Pretrained models with V-scale retain strong AS yet exhibit weaker MA, exactly the pattern predicted if GS mediate the relationship between the two phenomena.
+We support this view with complementary evidence. Empirically, we track gradient sinks during training and show that it is concentrated in attention blocks, while RMSNorm-mediated gradient compression scales almost inversely with activation norms. Theoretically, we show that under causal mask, sink structure naturally creates gradient aggregation on sink tokens. Finally, we test the mechanism by intervening backward path. Our proposed \emph{V-scale} acts as a value-path gradient valve: it largely preserves forward attention behavior while attenuating value-path backpropagation of sink tokens. Pretrained models with V-scale retain strong AS yet exhibit weaker MA, which is consistent with GS being the dominant training-time mediator between the two phenomena.
 
 Our contributions can be summarized as follows:
 \begin{itemize}
-\item We introduce \emph{gradient sinks} (GS), a backward-pass phenomenon in Transformers, and identify GS as a key training-time mediator linking attention sinks and massive activations.
-\item We propose a mechanistic for their relationship: under causal mask, AS induces GS on sink tokens and MA as a plausible adaptive response to localized gradient pressure leads RMSNorm to compress these gradients in inverse proportion to activation norms.
-\item We support this account with theory and targeted experiments, including training-time gradient measurements, backward-path interventions, and \emph{V-scale}, a value-path gradient valve that weakens MA while preserving strong AS.
+\item We identify \emph{gradient sinks} (GS), a backward-pass phenomenon in Transformers, and propose GS as a key mediator linking attention sinks (AS) to massive activations (MA).
+\item We show pronounced gradient concentration on the sink token and its close association with the emergence of MA by training-time measurements. We further corroborate this picture with derivation of the core backward structure.
+\item We introduce \emph{V-scale}, a simple modification that acts as a value-path gradient valve. Experiments show that trained V-scale models suppress MA while preserving AS, providing intervention evidence for our hypothesis.
 \end{itemize}
 
 % 后续全文结构，每一节专注于一件事情
@@ -97,7 +90,6 @@ Our contributions can be summarized as follows:
 \section{Preliminaries}
 \label{sec:prelim}
 This section fixes notation and defines the observables used throughout the paper.
-Our methodological contribution in this section is the introduction of \emph{Bloat/Compress/Change} ratios of gradients, which are designed to expose the training-time mediator between AS and MA.
 
 \paragraph{Pre-norm Transformers.}
 We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs \citep{touvron2023llama,zhang2019rmsnorm,su2024rope,shazeer2020gluvariants}.
@@ -113,18 +105,17 @@ A pre-norm block updates the sequence as
         H^{\ell+1} &= H^{\ell+\frac12} + R^{\mathrm{mlp},\ell}.
     \end{aligned}
 \end{equation}
-Here $R^{\mathrm{attn},\ell}$ and $R^{\mathrm{mlp},\ell}$ denote the residual updates produced by the attention and MLP branches, respectively. RMSNorm is applied token-wise:
-\begin{equation}
-\label{eq:rmsnorm_def}
-\mathrm{RMSNorm}(x)=\gamma \odot \frac{x}{\mathrm{rms}(x)},
-\quad
-\mathrm{rms}(x)=\sqrt{\frac{1}{d_{\mathrm{model}}}\|x\|_2^2+\epsilon},
-\quad
-x\in\mathbb{R}^{d_{\mathrm{model}}},
-\end{equation}
-where $\gamma\in\mathbb{R}^{d_{\mathrm{model}}}$ is learnable and $\epsilon>0$ is for numerical stability \citep{zhang2019rmsnorm}.
+% RMSNorm is applied token-wise:
+% \begin{equation}
+% \label{eq:rmsnorm_def}
+% \mathrm{RMSNorm}(x)=\gamma \odot \frac{x}{\mathrm{rms}(x)},
+% \quad
+% \mathrm{rms}(x)=\sqrt{\frac{1}{d_{\mathrm{model}}}\|x\|_2^2+\epsilon},
+% \quad
+% x\in\mathbb{R}^{d_{\mathrm{model}}},
+% \end{equation}
+% where $\gamma\in\mathbb{R}^{d_{\mathrm{model}}}$ is learnable and $\epsilon>0$ is for numerical stability \citep{zhang2019rmsnorm}.
 
-\paragraph{Single-head attention notation.}
 The attention block can be either multi-head attention (MHA) \citep{vaswani2017attention} or a variant such as grouped-query attention (GQA) \citep{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. That is, we write the query state as $q_t=q_t^{\ell,h}$ and similarly for other per-head variables. Let the head dimension be $d$. With RoPE, the query, key, and value states at token position $t$ are
 \begin{equation}\label{eq:qkv_def}
     q_t = R_t W_Q \widetilde h_t,
@@ -154,15 +145,13 @@ o_t = W_O y_t.
 \end{equation}
 
 \paragraph{Metrics for Attention Sinks and Massive Activations.}
-We now define the forward-pass quantities used to track AS and MA. Prior papers have used slightly different diagnostics and here we want to choose continuous statistics that are convenient for theory and are stable across training.
-
-For a candidate sink position $s$ (typically the first token), thresholded criteria are often used to count sink-like behavior and the Sink Rate is defined as \citep{gu2025when,queipo-de-llano2026attention}
+We define the forward-pass quantities used to track AS and MA. For a candidate sink position $s$ (typically the first token), we follow \citep{gu2025when,queipo-de-llano2026attention} and use thresholded criteria to count sink-like behavior:
 \begin{equation}\label{eq:sink_rate}
     \text{Sink}_s^{\epsilon,\ell} = \frac{1}{H} \sum_{h=1}^H \mathbb{I}(\alpha_s^{\ell,h} > \epsilon),
     \quad
     \alpha_s^{\ell,h}=\frac{1}{T_\epsilon}\sum_{t=s}^{s+T_\epsilon-1} a_{ts}^{\ell,h},
 \end{equation}
-where $\epsilon$ is a predefined threshold. $H$ is the number of attention heads in each layer, respectively. Following prior work we set $\epsilon=0.3$ and $T_\epsilon=64$ \citep{gu2025when}. In this paper, for theory and training dynamics measurements, we prefer the following simpler and continuous column statistics:
+where $\epsilon$ is a predefined threshold. $H$ is the number of attention heads in each layer. Following prior work we set $\epsilon=0.3$ and $T_\epsilon=64$ \citep{gu2025when}. In this paper, for theory and training dynamics measurements, we also introduce the following simpler and continuous column statistics:
 \begin{equation}\label{eq:sink_mass}
 M_s^{\ell,h} := \sum_{t=s}^{T} a_{ts}^{\ell,h},
 \quad
@@ -217,7 +206,7 @@ The terminology is chosen to match the mechanism we later test. \emph{Bloat} mea
 
 \section{From Attention Sink to Gradient Sink}
 \label{sec:as_to_gs}
-This section turn to find what AS indeuces in backpropagation. Empirically, we illustrate that the sink token is also a gradient sink mainly on the value path. Theoretically, we show that under causal mask, an attention sink can directly aggregate value-side backward signals onto the sink token.
+This section turn to find what AS indeuces in backpropagation. Empirically, we illustrate that the sink token is also a gradient sink mainly on the value path. Theoretically, we show that under causal mask, an attention sink can directly aggregate value-path backward signals onto the sink token.
 
 \subsection{Empirical Observations}
 We train \texttt{LlamaForCausalLM} models from scratch and analyze checkpoints throughout training. The models are pretrained on C4 dataset \citep{raffel2020exploring} using AdamW optimizer. During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}.
@@ -289,7 +278,7 @@ The statistics are averaged over layers.
 Figure~\ref{fig:qkv_grads_over_tokens} shows a clear and highly structured asymmetry.
 On the key and value pathways, the gradient norm exhibits a pronounced spike at token 0 across checkpoints, after which it drops rapidly and remains relatively flat over most of the sequence.
 This indicates that the dominant backward concentration is not a generic preference for early positions, but a highly localized effect centered on the initial token.
-Moreover, the value-side spike is substantially larger than the key-side one, suggesting that the strongest gradient concentration is carried by the value path.
+Moreover, the value-path spike is substantially larger than the key-side one, suggesting that the strongest gradient concentration is carried by the value path.
 
 The query pathway looks qualitatively different.
 Its token-wise gradient profile is comparatively flat across most positions, and token 0 does not show the same privileged status.
@@ -347,7 +336,7 @@ M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s).
 Hence stronger sink columns imply systematically larger value-path gradient concentration.
 \end{theorem}
 
-Theorem~\ref{thm:v_second_moment_main} makes AS$\Rightarrow$GS on the value path the central inevitability statement of the paper. We then clarify why value-side interventions should matter most. The same derivation yields exact query/key-path gradients
+Theorem~\ref{thm:v_second_moment_main} makes AS$\Rightarrow$GS on the value path the central inevitability statement of the paper. We then clarify why value-path interventions should matter most. The same derivation yields exact query/key-path gradients
 \begin{equation}
 \label{eq:qk_exact_main}
 \nabla_{q_s}\mathcal{L}
@@ -499,7 +488,7 @@ This section implements that prediction.
 
 Several recent architectural variants mitigate extreme token phenomena like MA and AS by changing the attention nonlinearity, inserting dedicated gates, or modifying normalization structure \citep{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
 These results show that MA and AS are removable and seperable, but such changes strongly alter the forward geometry and therefore do not cleanly test the specific prediction of our backward-mechanism hypothesis. 
-Here we instead seek a modification that is mathematically transparent, remains close to the original Llama-like model, and primarily targets the dominant value-side backward channel identified in Section~\ref{sec:as_to_gs}.
+Here we instead seek a modification that is mathematically transparent, remains close to the original Llama-like model, and primarily targets the dominant value-path backward channel identified in Section~\ref{sec:as_to_gs}.
 
 The value path is the natural target for two reasons.
 First, our backward observations confirm that V-side gradient norms of sink token are several times larger than K-side ones. 
@@ -640,7 +629,7 @@ In particular, if $\|v\|_2^2\ll C$, then
 \frac{3\|v\|_2^2}{C}
 \,\|g_{\hat v}\|_2,
 \end{equation}
-so the value-side backward signal is strongly attenuated.
+so the value-path backward signal is strongly attenuated.
 \end{corollary}
 
 Corollary~\ref{cor:vscale_main} gives the precise reason we refer to V-scale as a \emph{gradient valve}.
@@ -676,7 +665,7 @@ The result is consistent across both model scales. On the AS metrics, V-scale pr
 This pattern is precisely what our mechanism predicts. V-scale does not directly modify the MLP that produces MA. Instead, it changes the value-path forward-backward flow. The most visible downstream effect is that the MLP output in the preceding layer becomes smaller. Thus the MA reduction is better explained as a training-time response to reduced gradient pressure than as a trivial consequence of shrinking the value vector itself.
 
 There is also an important limitation to keep in mind.
-The gradient arriving at the token representation after RMSNorm is not a pure value-side quantity but the sum of the $Q$, $K$, and $V$ paths:
+The gradient arriving at the token representation after RMSNorm is not a pure value-path quantity but the sum of the $Q$, $K$, and $V$ paths:
 \begin{equation}
 \label{eq:vscale_grad_sum}
 G(\widetilde h_s^\ell)
@@ -689,7 +678,7 @@ W_V^\top G(v_s^\ell),
 \end{equation}
 up to the fixed RoPE rotations and the sum over heads.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-Our goal is more modest and relevant to the hypothesis of this paper. The point is not to show that once the dominant value-side pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA. That is exactly the behavior observed in Figure~\ref{fig:vscale_as_ma_compare}.
+Our goal is more modest and relevant to the hypothesis of this paper. The point is not to show that once the dominant value-path pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA. That is exactly the behavior observed in Figure~\ref{fig:vscale_as_ma_compare}.
 
 Overall, V-scale closes the experimental loop of this paper:
 \[
