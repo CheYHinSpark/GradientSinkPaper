@@ -340,7 +340,7 @@ The right panel explains why this alignment matters.
 Although $\mathrm{Bloat}^{\mathrm{attn}}$ can become very large on the first token, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, with the exception of the points located in the lower-right corner, which are from the first layer.
 That is, the net gradient ratio across the residual transition stays close to one even when the branch internally can exhibit strong amplification.
 This observation distinguishes local gradient pressure from global gradient instability and is consistent with the broader literature on trainable deep residual architectures.
-A major reason residual networks remain optimizable at depth is that signal propagation stays appropriately close to identity, rather than drifting into systematic explosion or collapse \citep{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2022deepnet}.
+A major reason residual networks remain optimizable at depth is that signal propagation stays appropriately close to identity, rather than drifting into systematic explosion or collapse \citep{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2024deepnet}.
 From this perspective, $\mathrm{Change}\approx 1$ is not a cosmetic detail but it indicates that the localized gradient pressure revealed by $\mathrm{Bloat}$ is reshaped into a regime compatible with stable residual propagation.
 
 The same three ratios in the MLP branch are also examined.
@@ -754,8 +754,7 @@ and
 Combining these bounds proves the theorem.
 \end{proof}
 
-\begin{corollary}[Deterministic value-side upper bounds]
-\label{cor:v-deterministic-app}
+\begin{corollary}[Deterministic value-side upper bounds]\label{cor:v-deterministic-app}
 For any realization of $\{g_t\}_{t=1}^T$,
 \[
     \|\nabla_{v_s}L\|_2 \le \sum_{t=1}^T a_{ts}\|g_t\|_2 \le M_s \max_t \|g_t\|_2,
@@ -862,9 +861,7 @@ Using $\sum_{j \le s} a_{sj}=1$, together with Assumption~\ref{assump:q-bounded-
 The statement for $s=1$ was already established in Proposition~\ref{prop:q-exact-app}.
 \end{proof}
 
-\subsection{RMSNorm as a Gradient-Compression Mechanism}
-\label{app:theory:rmsnorm}
-
+\subsection{RMSNorm as a Gradient-Compression Mechanism}\label{app:theory:rmsnorm}
 This subsection formalizes the mechanism used in Section~\ref{sec:pressure_reshape} to explain why large token norms can reduce backpropagated gradient magnitude in a pre-norm Transformer.
 
 For $x \in \mathbb{R}^d$ and gain vector $\gamma \in \mathbb{R}^d$, define
@@ -875,8 +872,7 @@ For $x \in \mathbb{R}^d$ and gain vector $\gamma \in \mathbb{R}^d$, define
 \]
 Denote $r := \mathrm{rms}(x)$, $D := \mathrm{diag}(\gamma)$, and $y := \mathrm{RMSNorm}(x)$.
 
-\begin{proposition}[Exact Jacobian of RMSNorm]
-\label{prop:rms-jac-app}
+\begin{proposition}[Exact Jacobian of RMSNorm]\label{prop:rms-jac-app}
 The Jacobian $J_{\mathrm{rms}}(x) := \partial y / \partial x \in \mathbb{R}^{d\times d}$ is
 \[
     J_{\mathrm{rms}}(x) = \frac{1}{r}D - \frac{1}{r^3 d} D x x^\top.
@@ -891,8 +887,7 @@ Since $y = D(x/r)$, we have
 Now $\frac{\partial}{\partial x}\left(\frac{1}{r}\right) = -\frac{1}{r^2}\frac{\partial r}{\partial x} = -\frac{1}{r^3 d}x^\top$ gives the stated formula.
 \end{proof}
 
-\begin{corollary}[RMSNorm compresses gradients as $\|x\|$ grows]
-\label{cor:rms-compress-app}
+\begin{corollary}[RMSNorm compresses gradients as $\|x\|$ grows]\label{cor:rms-compress-app}
 Let $\nabla_y L$ be the upstream gradient at the RMSNorm output. Then the operator norm is bounded by 
 \[
     \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{r}\left(1 + \frac{\|x\|_2^2}{dr^2}\right) \le \frac{2\|\gamma\|_\infty}{r},
@@ -949,8 +944,7 @@ We now analyze the V-scale map used in Section~\ref{sec:vscale}. On the pre-proj
     C>0.
 \]
 
-\begin{proposition}[Exact Jacobian of V-scale]
-\label{prop:vscale-jac-app}
+\begin{proposition}[Exact Jacobian of V-scale]\label{prop:vscale-jac-app}
 The Jacobian $J_\phi(v) := \partial \hat{v} / \partial v$ is
 \[
     J_\phi(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top.
@@ -989,8 +983,7 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 
 These results means that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
 
-\subsection{Supporting Result for Value-State Drain}
-\label{app:theory:vsd}
+\subsection{Supporting Result for Value-State Drain}\label{app:theory:vsd}
 The main paper does not require a full theorem for value-state drain. Nevertheless, it is useful to isolate a principled sufficient mechanism under which stronger sink statistics make nonzero sink values more expensive.
 
 Consider varying only the sink value $v_s$ while holding $Q$, $K$, and the other values fixed. Write
@@ -1006,8 +999,7 @@ Then the induced change in head output is
     \Delta o_t = m_t W_O \Delta v_s.
 \]
 
-\begin{definition}[Task-aligned drive]
-\label{def:task-drive-app}
+\begin{definition}[Task-aligned drive]\label{def:task-drive-app}
 Under a local quadratic approximation in $v_s$, we write
 \[
     L(v_s) \approx \mathrm{const} + \langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s,
@@ -1021,16 +1013,14 @@ where
 We call $\|b\|_2$ the \emph{task-aligned drive}, which measures the first-order incentive to make $v_s$ nonzero.
 \end{definition}
 
-\begin{assumption}[Local quadratic model in head outputs]
-\label{assump:quadratic-app}
+\begin{assumption}[Local quadratic model in head outputs]\label{assump:quadratic-app}
 There exist vectors $\gamma_t \in \mathbb{R}^{d_{\mathrm{model}}}$ and symmetric positive semidefinite matrices $H_t \succeq 0$ such that for the perturbations $\{\Delta o_t\}$,
 \[
     L(\{\Delta o_t\}) = L_0 + \sum_{t=1}^T \langle \gamma_t, \Delta o_t\rangle + \frac{1}{2}\sum_{t=1}^T \Delta o_t^\top H_t \Delta o_t + o(\|\Delta o\|^2).
 \]
 \end{assumption}
 
-\begin{theorem}[Curvature-based shrinkage of sink values]
-\label{thm:as-to-vsd-app}
+\begin{theorem}[Curvature-based shrinkage of sink values]\label{thm:as-to-vsd-app}
 Assume Assumption~\ref{assump:quadratic-app}. Suppose further that there exists $\mu>0$ such that $H_t \succeq \mu I$ for all $t$, and that the output projection is nondegenerate on the head subspace with minimum singular value $\sigma_{\min}(W_O)>0$. Then
 \[
     A \succeq \mu \left(\sum_{t=1}^T m_t^2\right) W_O^\top W_O = \mu S_s W_O^\top W_O.
