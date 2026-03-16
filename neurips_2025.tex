@@ -87,8 +87,7 @@ Our contributions can be summarized as follows:
 % 为什么 GS 会诱导 MA？
 % 如果只减轻 gradient pressure，能否在保留 AS 的同时压低 MA？
 
-\section{Preliminaries}
-\label{sec:prelim}
+\section{Preliminaries}\label{sec:prelim}
 This section fixes notation and defines the observables used throughout the paper.
 
 \paragraph{Pre-norm Transformers.}
@@ -186,8 +185,7 @@ Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{C
 
 The terminology is chosen to match the observation we later show. Bloat measures gradient expansion before the residual contribution reaches the pre-norm token representation in an Attention or MLP branch. Compress measures the attenuation introduced by RMSNorm on that branch contribution. Change measures the net gradient-norm ratio across the residual transition.
 
-\section{From Attention Sink to Gradient Sink}
-\label{sec:as_to_gs}
+\section{From Attention Sink to Gradient Sink}\label{sec:as_to_gs}
 This section turns to find what AS induces in backpropagation. 
 
 \subsection{Empirical Observations}
@@ -215,8 +213,7 @@ At each checkpoint, we run one forward-backward pass using the same causal langu
     From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
     The solid blue curve shows token 0, the dashed green curve shows the mean over the rest early tokens, and the dotted purple curve shows their maximum; ``rest early tokens'' refers to positions 1--15.
     The saturation of colors indicates training checkpoints.
-    }
-    \label{fig:baseline_forward_main}
+    }\label{fig:baseline_forward_main}
 \end{figure*}
 
 We begin with forward observables. 
@@ -249,8 +246,7 @@ The statistics are averaged over layers.
     Top row: 0.1B model; bottom row: 0.3B model.
     From left to right: query gradient norm, key gradient norm, and value gradient norm as functions of token position mean over layers.
     The saturation of colors indicates training checkpoints.
-    }
-    \label{fig:qkv_grads_over_tokens}
+    }\label{fig:qkv_grads_over_tokens}
 \end{figure*}
 
 Figure~\ref{fig:qkv_grads_over_tokens} shows a clear and highly structured asymmetry.
@@ -264,9 +260,7 @@ Another consistent feature is that all the gradient norms decay to nearly zero a
 Taken together, these observations establish the central empirical fact of this section:
 in pretrained baseline models, the sink token is not only a forward attention sink but also a backward gradient sink.
 
-\subsection{Theoretical Results}
-\label{subsec:theory_as_to_gs}
-
+\subsection{Theoretical Results}\label{subsec:theory_as_to_gs}
 We next show that the link of $AS$ and $GS$ is not just an empirical regularity.
 This subsection focuses exclusively on the most central theoretical framework. Supplementary theoretical results and complete proofs are provided in Appendix~\ref{app:proofs}.
 
@@ -279,8 +273,7 @@ Let $g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}$ denote t
 \end{equation}
 This identity already exposes the mechanism: the gradient on $v_s$ is an attention-weighted sum of all upstream gradients whose outputs read value from token $s$.. If many later tokens attend to token $s$, then many later gradients also pass through $v_s$. A convenient quantitative version follows from a mean-plus-noise decomposition $g_t = \mu + \varepsilon_t$ for stochastic gradients \citep{mandt2017sgd, mccandlish2018noise}.
 
-\begin{theorem}[V-side gradient control by sink statistics]
-\label{thm:v_second_moment_main}
+\begin{theorem}[V-side gradient control by sink statistics]\label{thm:v_second_moment_main}
 Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and
 \[
 \big|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))\big| \le \rho
@@ -325,20 +318,8 @@ Theorem~\ref{thm:v_second_moment_main} makes AS$\Rightarrow$GS on the value path
 The crucial asymmetry is that K-side gradients aggregate column-wise just as V-side ones, while Q-side gradients are row-local.
 For the first token under causal mask, the attention row contains only self-attention, which gives $\nabla_{q_0}\mathcal{L} = 0$. This matches our measurements that the sink token shows strong value/key gradient concentration but no special query-path advantage.
 
-\section{Gradient Reshaping by Massive Activations}
-\label{sec:pressure_reshape}
-Now we examine how the localized gradient pressure is reshaped inside pre-norm residual blocks.  
-This section shows an empirical three-stage pattern: the sink token experiences strong branch-local gradient amplification (\emph{Bloat}), disproportionately strong normalization-aligned attenuation (\emph{Compress}), and yet only moderate net gradient change across the residual transition (\emph{Change}).  
-
-We begin with the attention blocks.
-For each layer of a checkpoint, we compare the activation norms of the branch input, $\|h_{\mathrm{in}}^\ell\|$, against one of the three ratios defined in \eqref{eq:ratios_attn}:
-\[
-\mathrm{Bloat}^{\mathrm{attn},\ell},\quad
-\mathrm{Compress}^{\mathrm{attn},\ell},\quad
-\mathrm{Change}^{\mathrm{attn},\ell}.
-\]
-The scatter plots are colored by token group: token 0, token 1, tokens 2--3, tokens 4--7, and the remaining early tokens (8--15).
-This visualization makes it possible to see simultaneously where large gradient pressure appears, where strong attenuation happens, and whether the final residual-stream gradient ratio remains stable.
+\section{Gradient Reshaping by Massive Activations}\label{sec:pressure_reshape}
+This section examines how the localized gradient pressure is reshaped and asks whether the observed MA pattern aligns with a concrete gradient-compression mechanism in pre-norm architectures. 
 
 \begin{figure*}[tb]
     \centering
@@ -359,32 +340,35 @@ This visualization makes it possible to see simultaneously where large gradient 
     }\label{fig:attn_scatter_main}
 \end{figure*}
 
+We begin with the attention blocks.
+For each layer of a checkpoint, we compare the activation norms of the branch input, $\|h_{\mathrm{in}}^\ell\|$, against one of the three ratios defined in Eq.~\eqref{eq:ratios_attn}:
+\[
+\mathrm{Bloat}^{\mathrm{attn},\ell},\quad
+\mathrm{Compress}^{\mathrm{attn},\ell},\quad
+\mathrm{Change}^{\mathrm{attn},\ell}.
+\]
+
 Figure~\ref{fig:attn_scatter_main} shows that these three ratios play sharply different roles.
+The scatter plots are colored by token groups: token 0, token 1, tokens 2--3, tokens 4--7, and the remaining early tokens (8--15).
 In the left panel, large activation points concentrate in the high-bloat regime, and this region is dominated by token 0.
 This means that the sink token is not merely a place where gradients are large in an absolute sense but specifically the place where the attention branch locally amplifies gradient norm most strongly.
 By contrast, the remaining tokens mostly populate a much milder regime.
-Thus, the backward pressure created by the gradient sink is highly localized rather than uniformly distributed across the sequence.
 
 The middle panel shows an equally striking structure for $\mathrm{Compress}^{\mathrm{attn}}$.
 The points collapse onto an almost linear trend whose slope is $-1$, indicating that RMSNorm-mediated attenuation for gradient pressure is strongly aligned with the scale of the token activation.
 This is exactly the empirical pattern expected if MA act as an effective gradient-compression channel in pre-norm architecture.
 
 The right panel explains why this alignment matters.
-Although $\mathrm{Bloat}^{\mathrm{attn}}$ can become very large on sink token, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, with the exception of the points located in the lower-right corner, which are from the first layer.
+Although $\mathrm{Bloat}^{\mathrm{attn}}$ can become very large on the first token, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, with the exception of the points located in the lower-right corner, which are from the first layer.
 That is, the net gradient ratio across the residual transition stays close to one even when the branch internally can exhibit strong amplification.
-This observation is important because it distinguishes local gradient pressure from global gradient instability.
-If large bloat directly translated into equally large net residual-stream gradients, one would expect severe cross-layer gradient explosion.
+This observation distinguishes local gradient pressure from global gradient instability and is consistent with the broader literature on trainable deep residual architectures.
+A major reason residual networks remain optimizable at depth is that signal propagation stays appropriately close to identity, rather than drifting into systematic explosion or collapse \citep{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2022deepnet}.
+From this perspective, $\mathrm{Change}\approx 1$ is not a cosmetic detail but it indicates that the localized gradient pressure revealed by $\mathrm{Bloat}$ is reshaped into a regime compatible with stable residual propagation.
 
-This near-unit net change is also consistent with the broader literature on trainable deep residual architectures.
-A major reason residual networks remain optimizable at depth is that signal propagation stays close to identity in an appropriate sense, rather than drifting into systematic explosion or collapse \citep{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2022deepnet}.
-From this perspective, $\mathrm{Change}\approx 1$ is not a cosmetic detail.
-It indicates that the localized gradient pressure revealed by $\mathrm{Bloat}$ is not simply passed upstream unchecked; instead, it is reshaped into a regime compatible with stable residual propagation.
-
-We next examine the same three ratios in the MLP branch.
+The same three ratios in the MLP branch are also examined.
 The left panel of Figure~\ref{fig:mlp_scatter_main} shows that $\mathrm{Bloat}^{\mathrm{mlp}}$ is much less dominated by token 0 than in the attention branch.
-Large activation points are still present but the bloat values of token 0 in the MLP branch are not much higher than those of other tokens.
 Thus, the MLP branch does not appear to be the primary location where localized pressure is generated.
-By contrast, the middle panel again shows a remarkably tight alignment between activation norms and compression as observed in the attention block, indicating that RMSNorm-mediated attenuation is strongly aligned with the scale of the token activation. The right panel also shows that $\mathrm{Change}^{\mathrm{mlp}}$ remains concentrated near $\log_{10}1=0$.
+By contrast, the middle panel again shows a tight alignment between activation norms and compression as observed in the attention block. The right panel also shows that $\mathrm{Change}^{\mathrm{mlp}}$ remains concentrated near $\log_{10}1=0$.
 
 \begin{figure*}[tb]
     \centering
@@ -398,9 +382,9 @@ By contrast, the middle panel again shows a remarkably tight alignment between a
     \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
     \caption{
     Scatter plots relating gradient reshaping to input activation norms of MLP block. Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, 
-    $\log_{10}\mathrm{Compress}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, and
-    $\log_{10}\mathrm{Change}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$.
+    From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, 
+    $\log_{10}\mathrm{Compress}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, and
+    $\log_{10}\mathrm{Change}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$.
     Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
     }\label{fig:mlp_scatter_main}
 \end{figure*}
@@ -408,29 +392,24 @@ By contrast, the middle panel again shows a remarkably tight alignment between a
 The empirical alignment between massive activations and strong compression is not accidental.
 It follows from a basic property of RMSNorm.
 
-\begin{theorem}[Activation-dependent compression under RMSNorm]
-\label{thm:rms_compress_main}
+\begin{theorem}[Activation-dependent compression under RMSNorm]\label{thm:rms_compress_main}
 Let
 \[
 y=\mathrm{RMSNorm}(x)
 =
 \gamma \odot \frac{x}{\rms(x)},
-\qquad
+\quad
 \rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon},
 \]
 and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
-Then
-\[
-\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y,
-\]
-and the Jacobian operator norm satisfies
+Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian operator norm satisfies
 \begin{equation}
 \label{eq:rms_operator_main}
 \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
 \le
 \frac{2\|\gamma\|_\infty}{\rms(x)}.
 \end{equation}
-Consequently,
+Consequently, we have
 \begin{equation}
 \label{eq:rms_grad_bound_main}
 \|\nabla_x\mathcal{L}\|_2
@@ -446,16 +425,9 @@ The theorem formalizes a key intuition used throughout this section that larger 
 
 In total, we observe that localized gradients are not merely large but selectively processed by pre-norm computation.
 In the attention branch, the sink token exhibits strong branch-local amplification, strong normalization-induced attenuation, and only limited net gradient change.
-In the MLP branch, token 0 no longer shows the same uniquely extreme bloat, but large activations remain tightly aligned with strong compression and near-unit net change.
-Together with Theorem~\ref{thm:rms_compress_main}, these results support an interpretation of MA in this paper:
-massive activations provide effective routes for attenuating localized gradient pressure. 
+These results support an interpretation that massive activations are consistent with a mechanism that attenuates localized gradient pressure through RMSNorm.
 
-
-
-
-
-\section{V-scale: A Value-Path Gradient Valve}
-\label{sec:vscale}
+\section{V-scale: A Value-Path Gradient Valve}\label{sec:vscale}
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily a response to localized gradient pressure, then reducing that pressure should weaken MA even when AS is largely preserved.
 This section implements that prediction.
 
@@ -498,7 +470,7 @@ by
 \end{equation}
 where $C>0$ is a scale parameter. We call this modification \emph{V-scale}.
 
-Figure~\ref{fig:vscale_design_and_loss}(left) shows where this modification acts inside the attention block. 
+Figure~\ref{fig:architecture_and_loss} (left) shows where this modification acts inside the attention block. 
 This map is chosen to satisfy three design desiderata.
 First, it does not affect the attention weights who depend only on $Q$ and $K$.
 Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1$ as $r\to\infty$.
@@ -540,10 +512,9 @@ J_{\phi}(v)
 \end{equation}
 Thus the map rescales gradients anisotropically: one gain along the radial direction of $v$, and another on the orthogonal subspace. By direct computation we have the following proposition.
 
-\begin{proposition}[Exact gains of V-scale]
-\label{prop:vscale_main}
+\begin{proposition}[Exact gains of V-scale]\label{prop:vscale_main}
 Let $r=\|v\|_2^2$.
-Then the Jacobian in \eqref{eq:vscale_jac} has eigenvalue
+Then the Jacobian in Eq.~\eqref{eq:vscale_jac} has eigenvalue
 \begin{equation}
 \label{eq:vscale_eigs_perp}
 \lambda_\perp(r)=\frac{r}{r+C}
@@ -574,8 +545,7 @@ Indeed, when $r\ll C$,
 \]
 so the map strongly attenuates gradients that pass through small-norm values of sink tokens.
 
-\begin{corollary}[V-scale is a value-path gradient valve]
-\label{cor:vscale_main}
+\begin{corollary}[V-scale is a value-path gradient valve]\label{cor:vscale_main}
 Let $g_{\hat v}=\nabla_{\hat v}\mathcal{L}$ be the upstream gradient at the scaled value state.
 Then
 \begin{equation}
@@ -611,7 +581,7 @@ This is the decisive prediction of our mechanism: if MA is compensating for GS, 
 
 \subsection{Experiments}
 We train V-scale models with the same data, optimizer, and model configurations as the corresponding baselines.
-Figure~\ref{fig:architecture_and_loss}(right) shows that V-scale models reach validation losses comparable to the baselines in both model sizes. 
+Figure~\ref{fig:architecture_and_loss} (right) shows that V-scale models reach validation losses comparable to the baselines in both model sizes. 
 Although we do not claim that achieving slightly lower training loss on such small scale models is of much practical significance, this result demonstrates that our modified models remain well trainable. 
 
 The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}. We compare baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
@@ -667,8 +637,7 @@ In this work, we revisited the relationship between attention sinks and massive 
 
 \appendix
 
-\section{Model and Training Configuration}
-\label{app:config}
+\section{Model and Training Configuration}\label{app:config}
 Table~\ref{tab:config} summarizes the training configurations used in our experiments.
 Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention.
 
@@ -676,8 +645,7 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
 \begin{table}[h]
     \centering
     \small
-    \caption{Training configuration. }
-    \label{tab:config}
+    \caption{Training configuration. }\label{tab:config}
     \begin{tabular}{p{0.3\linewidth}p{0.2\linewidth}p{0.2\linewidth}}
         \toprule
         Item & 0.1B runs & 0.3B runs \\
@@ -717,8 +685,7 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \end{tabular}
 \end{table}
 
-\section{Proofs}
-\label{app:proofs}
+\section{Proofs}\label{app:proofs}
 This appendix collects the proofs for the theoretical statements used in Section~\ref{sec:as_to_gs}.
 Throughout, we fix one layer and one attention head, and use the notations introduced in Section~\ref{sec:prelim}.
 In particular,
@@ -730,8 +697,7 @@ o_t = W_O y_t,
 g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}.
 \]
 
-\begin{lemma}[Softmax Jacobian identity]
-\label{lem:softmax_jac_app}
+\begin{lemma}[Softmax Jacobian identity]\label{lem:softmax_jac_app}
 Fix $t$ and consider the vector $a_t = \mathrm{softmax}(z_t)$ on the causal support $\{j\le t\}$.
 Then for any $j,s\le t$,
 \begin{equation}
@@ -755,8 +721,7 @@ a_{tj}(\mathbf{1}_{j=s} - a_{ts}).
 \]
 \end{proof}
 
-\begin{lemma}[Sensitivity of $y_t$ to a single logit $z_{ts}$]
-\label{lem:dy_dz_app}
+\begin{lemma}[Sensitivity of $y_t$ to a single logit $z_{ts}$]\label{lem:dy_dz_app}
 For fixed $t$ and $s\le t$,
 \begin{equation}
 \label{eq:dy_dz_app}
@@ -888,8 +853,7 @@ and
 Substituting these bounds yields Eq.~\eqref{eq:v_second_moment_bound_main}.
 \end{proof}
 
-\begin{proposition}[Exact K-side gradient]
-\label{prop:k_exact_app}
+\begin{proposition}[Exact K-side gradient]\label{prop:k_exact_app}
 Define
 \[
 \beta_{ts} := \langle g_t, v_s - y_t \rangle.
@@ -937,8 +901,7 @@ Substituting the two pieces gives
 \]
 \end{proof}
 
-\begin{proposition}[Exact Q-side gradient and initial-token corollary]
-\label{prop:q_exact_app}
+\begin{proposition}[Exact Q-side gradient and initial-token corollary]\label{prop:q_exact_app}
 For Q-side,
 \begin{equation}
 \label{eq:q_exact_app}
@@ -989,16 +952,14 @@ Hence $\beta_{ss} = \langle g_s, v_s - y_s \rangle = 0$, and Eq.~\eqref{eq:q_exa
 \end{proof}
 
 
-\section{Additional theory for Section~\ref{sec:pressure_reshape}}
-\label{app:pressure_reshape}
+\section{Additional theory for Section~\ref{sec:pressure_reshape}}\label{app:pressure_reshape}
 
 This appendix records the auxiliary results used in Section~\ref{sec:pressure_reshape}.  
 The point of these results is not to prove a full causal statement GS $\Rightarrow$ MA, but to formalize two weaker claims used in the main text:
 (i) RMSNorm attenuates backward signals more strongly when the incoming activation norm is large, and
 (ii) net residual-stream \emph{Change} staying near $1$ means that large branch-local pressure is not simply converted into equally large gradient amplification across depth.
 
-\subsection{RMSNorm as a local gradient-compression operator}
-\label{app:rms_compress_sec4}
+\subsection{RMSNorm as a local gradient-compression operator}\label{app:rms_compress_sec4}
 
 We use the standard RMSNorm map \citep{zhang2019rmsnorm}
 \[
@@ -1010,8 +971,7 @@ We use the standard RMSNorm map \citep{zhang2019rmsnorm}
 \]
 For simplicity of presentation, we suppress $\epsilon$ in the symbolic derivation below; the same conclusion continues to hold with the usual stabilizer.
 
-\begin{proposition}[Exact Jacobian of RMSNorm]
-\label{prop:rms_jac_sec4}
+\begin{proposition}[Exact Jacobian of RMSNorm]\label{prop:rms_jac_sec4}
 Let $r := \rms(x)$ and $D := \mathrm{diag}(\gamma)$. Then the Jacobian of
 $y = \mathrm{RMSNorm}(x)$ is
 \[
@@ -1042,8 +1002,7 @@ J_{\mathrm{rms}}(x)
 \]
 \end{proof}
 
-\begin{corollary}[Activation-dependent compression]
-\label{cor:rms_compress_sec4}
+\begin{corollary}[Activation-dependent compression]\label{cor:rms_compress_sec4}
 Let $g_y = \nabla_y \mathcal{L}$ be the upstream gradient at the RMSNorm output. Then
 \[
 \nabla_x \mathcal{L} = J_{\mathrm{rms}}(x)^\top g_y,
@@ -1084,9 +1043,7 @@ Therefore,
 Since $r^2 \ge \|x\|_2^2/d$, the parenthesized term is at most $2$, yielding the stated bound. The final gradient inequality follows immediately.
 \end{proof}
 
-\subsection{Why \emph{Change} near 1 indicates preserved residual-stream gradient scale}
-\label{app:change_near_one_sec4}
-
+\subsection{Why \emph{Change} near 1 indicates preserved residual-stream gradient scale}\label{app:change_near_one_sec4}
 We now show that the quantity called \emph{Change} in the main text is the correct net residual-stream diagnostic.
 
 \paragraph{Attention block.}
@@ -1112,8 +1069,7 @@ By the definitions in Section~\ref{subsec:prelim_backward_obs},
 \]
 Therefore the product of Bloat and Compress is exactly the relative norm of the branch contribution compared with the outgoing residual-stream gradient.
 
-\begin{proposition}[Residual perturbation bound for attention \emph{Change}]
-\label{prop:change_bound_attn}
+\begin{proposition}[Residual perturbation bound for attention \emph{Change}]\label{prop:change_bound_attn}
 For every token $t$ and layer $\ell$,
 \[
 \left|\mathrm{Change}_t^{\mathrm{attn},\ell} - 1\right|
@@ -1173,14 +1129,11 @@ and exactly the same proof gives
 \mathrm{Compress}_t^{\mathrm{mlp},\ell}.
 \]
 
-\subsection{A minimal sufficient-condition view}
-\label{app:minimal_sufficient_sec4}
-
+\subsection{A minimal sufficient-condition view}\label{app:minimal_sufficient_sec4}
 The previous corollary already gives the local mechanism used in the main text: if the incoming residual norm is large, then RMSNorm attenuates gradients more strongly.  
 A very small additional step turns this into the ``why large activation aligns with strong compression'' statement.
 
-\begin{proposition}[Large activation as a sufficient condition for bounded local backward sensitivity]
-\label{prop:need_activation_sec4}
+\begin{proposition}[Large activation as a sufficient condition for bounded local backward sensitivity]\label{prop:need_activation_sec4}
 Let $x$ be the input to an RMSNorm layer and $y = \mathrm{RMSNorm}(x)$.  
 If we require a target bound
 \[
