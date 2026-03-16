@@ -245,7 +245,7 @@ in pretrained baseline models, the sink token is not only a forward attention si
 
 \subsection{Theoretical Results}\label{subsec:theory_as_to_gs}
 We next show that the link of $AS$ and $GS$ is not just an empirical regularity.
-This subsection focuses exclusively on the most central theoretical framework. Supplementary theoretical results and complete proofs are provided in Appendix~\ref{app:proofs}.
+This subsection focuses exclusively on the most central theoretical framework. Supplementary theoretical results and complete proofs are provided in Appendix~\ref{app:theory}.
 
 Let $g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}$ denote the upstream gradient. Recall that $M_s$ and $S_s$ Eq.~\eqref{eq:sink_mass} denote the attention column mass and its second moment, respectively. Then by direct computation we have the following formula for exact V-side gradients
 \begin{equation}
@@ -384,7 +384,7 @@ Consequently, we have
 \end{equation}
 \end{theorem}
 
-The proof is deferred to Appendix~\ref{app:rms_compress_sec4}.
+The proof is deferred to Appendix~\ref{app:theory}.
 The theorem formalizes a key intuition that larger incoming activation norm provides a direct route to stronger local attenuation of backpropagated gradients.
 
 In total, we observe that localized gradients are not merely large but selectively processed by pre-norm computation.
@@ -442,8 +442,8 @@ This learnable version therefore introduces only one parameter per layer and per
 
 \begin{figure*}[tb]
     \centering
-    \includegraphics[width=0.48\linewidth]{pics/vscale_architecture.pdf}
-    \includegraphics[width=0.5\linewidth]{pics/compare/loss_comparison.pdf}
+    \includegraphics[width=0.45\linewidth]{pics/vscale_architecture.pdf}
+    \includegraphics[width=0.45\linewidth]{pics/compare/loss_comparison.pdf}
     \caption{
     V-scale design and training behavior.
     Left: schematic of V-scale inside a pre-norm Transformer block.
@@ -600,481 +600,472 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \end{tabular}
 \end{table}
 
-\section{Proofs}\label{app:proofs}
-This appendix collects the proofs for the theoretical statements used in Section~\ref{sec:as_to_gs}.
-Throughout, we fix one layer and one attention head, and use the notations introduced in Section~\ref{sec:prelim}.
-In particular,
-\[
-y_t = \sum_{j\le t} a_{tj} v_j,
-\quad
-o_t = W_O y_t,
-\quad
-g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}.
-\]
+\section{Additional Theoretical Results and Proofs}\label{app:theory}
+This appendix consolidates the supplementary theoretical material used in the main text. Throughout, we fix one layer and one attention head, and use the notation introduced in Section~\ref{sec:prelim}.
 
-\begin{lemma}[Softmax Jacobian identity]\label{lem:softmax_jac_app}
-Fix $t$ and consider the vector $a_t = \mathrm{softmax}(z_t)$ on the causal support $\{j\le t\}$.
-Then for any $j,s\le t$,
-\begin{equation}
-\label{eq:softmax_jac_app}
-\frac{\partial a_{tj}}{\partial z_{ts}} = a_{tj}(\mathbf{1}_{j=s} - a_{ts}).
-\end{equation}
+\subsection{Exact Backpropagation Identities}\label{app:theory:exact}
+
+\begin{lemma}[Softmax Jacobian identity]\label{lem:softmax-jacobian-app}
+Fix a row $t$ and consider the causal softmax vector $a_t = \mathrm{softmax}(z_t)$ on the support $\{j \le t\}$. Then for any $j,s \le t$,
+\[
+    \frac{\partial a_{tj}}{\partial z_{ts}} = a_{tj} \bigl(\mathbf{1}_{j=s} - a_{ts}\bigr).
+\]
 \end{lemma}
-
 \begin{proof}
-By definition,
+By definition, we have $a_{tj} = \frac{e^{z_{tj}}}{\sum_{\ell \le t} e^{z_{t\ell}}}$. Differentiating with respect to $z_{ts}$ gives
 \[
-a_{tj} = \frac{e^{z_{tj}}}{\sum_{\ell\le t} e^{z_{t\ell}}}.
-\]
-Differentiating with respect to $z_{ts}$ gives
-\[
-\frac{\partial a_{tj}}{\partial z_{ts}}
-=
-\frac{e^{z_{tj}}\mathbf{1}_{j=s}(\sum_{\ell\le t} e^{z_{t\ell}}) - e^{z_{tj}}e^{z_{ts}}}{(\sum_{\ell\le t} e^{z_{t\ell}})^2}
-=
-a_{tj}(\mathbf{1}_{j=s} - a_{ts}).
+    \frac{\partial a_{tj}}{\partial z_{ts}}
+    = \frac{e^{z_{tj}} \mathbf{1}_{j=s} \left(\sum_{\ell \le t} e^{z_{t\ell}}\right) - e^{z_{tj}} e^{z_{ts}}}{\left(\sum_{\ell \le t} e^{z_{t\ell}}\right)^2}
+    = a_{tj} \bigl(\mathbf{1}_{j=s} - a_{ts}\bigr).
 \]
 \end{proof}
 
-\begin{lemma}[Sensitivity of $y_t$ to a single logit $z_{ts}$]\label{lem:dy_dz_app}
-For fixed $t$ and $s\le t$,
-\begin{equation}
-\label{eq:dy_dz_app}
-\frac{\partial y_t}{\partial z_{ts}} = a_{ts}(v_s - y_t).
-\end{equation}
+\begin{lemma}[Sensitivity of $y_t$ to a single logit]\label{lem:yt-logit-app}
+For fixed $t$ and $s \le t$, we have
+\[
+    \frac{\partial y_t}{\partial z_{ts}} = a_{ts} (v_s - y_t).
+\]
 \end{lemma}
-
 \begin{proof}
-Using $y_t = \sum_{j\le t} a_{tj} v_j$ and Lemma~\ref{lem:softmax_jac_app},
+Using $y_t = \sum_{j \le t} a_{tj} v_j$ and Lemma~\ref{lem:softmax-jacobian-app}, we have
 \[
-\frac{\partial y_t}{\partial z_{ts}}
-=
-\sum_{j\le t} \frac{\partial a_{tj}}{\partial z_{ts}} v_j
-=
-\sum_{j\le t} a_{tj}(\mathbf{1}_{j=s} - a_{ts})v_j
-=
-a_{ts}v_s - a_{ts}\sum_{j\le t} a_{tj} v_j
-=
-a_{ts}(v_s - y_t).
+    \frac{\partial y_t}{\partial z_{ts}}
+    = \sum_{j \le t} \frac{\partial a_{tj}}{\partial z_{ts}} v_j
+    = \sum_{j \le t} a_{tj} (\mathbf{1}_{j=s} - a_{ts}) v_j
+    = a_{ts} v_s - a_{ts} \sum_{j \le t} a_{tj} v_j
+    = a_{ts}(v_s - y_t).
 \]
 \end{proof}
 
-\begin{proof}[Proof of Theorem~\ref{thm:v_exact_main}]
-For fixed $t$, the Jacobian of $y_t$ with respect to $v_s$ is
+\begin{proposition}[Exact value-side gradient]\label{prop:v-exact-app}
+For any sink index $s$, we have
 \[
-\frac{\partial y_t}{\partial v_s}
-=
-\begin{cases}
-a_{ts} I & (s\le t),\\
-0 & (s>t).
-\end{cases}
+    \nabla_{v_s} L = \sum_{t=s}^T a_{ts} g_t.
 \]
-Applying the chain rule from $v_s \mapsto y_t \mapsto \mathcal{L}$ yields
+\end{proposition}
+\begin{proof}
+For fixed $t$, the Jacobian of $y_t$ with respect to $v_s$ is $\frac{\partial y_t}{\partial v_s} = a_{ts} I \mathbb{I}_{s\le t}$. Applying the chain rule from $v_s \to y_t \to L$ yields
 \[
-\nabla_{v_s}\mathcal{L}
-=
-\sum_{t=1}^{T}
-\left(\frac{\partial y_t}{\partial v_s}\right)^\top \nabla_{y_t}\mathcal{L}
-=
-\sum_{t=1}^{T} (a_{ts}I)^\top g_t
-=
-\sum_{t=1}^{T} a_{ts} g_t.
+    \nabla_{v_s} L
+    = \sum_{t=s}^T \left(\frac{\partial y_t}{\partial v_s}\right)^\top \nabla_{y_t} L
+    = \sum_{t=s}^T (a_{ts} I)^\top g_t
+    = \sum_{t=s}^T a_{ts} g_t.
 \]
-This proves Eq.~\eqref{eq:v_exact_main}.
 \end{proof}
+
+\begin{proposition}[Exact key-side gradient]\label{prop:k-exact-app}
+Define
+\[
+    \beta_{ts} := \langle g_t, v_s - y_t \rangle.
+\]
+Then we have
+\[
+    \nabla_{k_s} L = \sum_{t=1}^T a_{ts} \beta_{ts} \frac{q_t}{\sqrt{d}}.
+\]
+\end{proposition}
+\begin{proof}
+The key $k_s$ affects the logits $z_{ts} = \langle q_t, k_s \rangle / \sqrt{d}$ for all $t \ge s$. Since $a_{ts}=0$ when $t<s$, we may sum over all $t$. The chain rule gives
+\[
+    \nabla_{k_s} L
+    = \sum_{t=1}^T \left(\frac{\partial z_{ts}}{\partial k_s}\right)^\top \frac{\partial L}{\partial z_{ts}}.
+\]
+By $\frac{\partial z_{ts}}{\partial k_s} = \frac{q_t}{\sqrt{d}}$ and Lemma~\ref{lem:yt-logit-app}, we have
+\[
+    \frac{\partial L}{\partial z_{ts}}
+    = \left\langle \nabla_{y_t} L, \frac{\partial y_t}{\partial z_{ts}} \right\rangle
+    = \langle g_t, a_{ts}(v_s - y_t) \rangle
+    = a_{ts} \beta_{ts}.
+\]
+Substituting these two identities gives the claim.
+\end{proof}
+
+\begin{proposition}[Exact query-side gradient and first-token corollary]\label{prop:q-exact-app}
+For the query pathway,
+\[
+    \nabla_{q_s} L = \sum_{j \le s} a_{sj} \beta_{sj} \frac{k_j}{\sqrt{d}}.
+\]
+Moreover, under causal mask, we have $\nabla_{q_1} L = 0$.
+\end{proposition}
+\begin{proof}
+The query $q_s$ affects only the logits $\{z_{sj}\}_{j \le s}$. Hence
+\[
+    \nabla_{q_s} L
+    = \sum_{j \le s} \left(\frac{\partial z_{sj}}{\partial q_s}\right)^\top \frac{\partial L}{\partial z_{sj}}
+    = \sum_{j \le s} \frac{k_j}{\sqrt{d}} \left\langle g_s, \frac{\partial y_s}{\partial z_{sj}} \right\rangle.
+\]
+Applying Lemma~\ref{lem:yt-logit-app} with row $s$ and column $j$ gives $\frac{\partial y_s}{\partial z_{sj}} = a_{sj}(v_j - y_s)$, so we have
+\[
+    \frac{\partial L}{\partial z_{sj}} = a_{sj} \langle g_s, v_j - y_s \rangle = a_{sj} \beta_{sj}.
+\]
+This proves the general formula.
+For $s=1$, causality implies $a_{11}=1$ and $y_1=v_1$. Thus we have $\beta_{11}=0$ and $\nabla_{q_1}L=0$.
+\end{proof}
+
+\subsection{Value-Path Theorem and Deterministic Bounds}\label{app:theory:vside}
+We prove the main value-path theorem used in Section~\ref{sec:as_to_gs}.
+
+\begin{assumption}[Mean-plus-noise model]\label{assump:mean-noise-app}
+Conditioned on the current parameters and minibatch, the upstream gradient satisfies
+\[
+    g_t = \mu + \varepsilon_t,
+\]
+where $\mu := \mathbb{E}[g_t]$ is the coherent component and $\mathbb{E}[\varepsilon_t]=0$.
+\end{assumption}
+
+\begin{assumption}[Bounded cross-token covariance]\label{assump:cov-app}
+There exist $\sigma^2 \ge 0$ and $\rho \ge 0$ such that for all $t \neq t'$,
+\[
+    \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t)\bigr) \le \sigma^2,
+    \quad
+    \bigl|\mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'})\bigr)\bigr| \le \rho.
+\]
+\end{assumption}
+
+Assumption~\ref{assump:mean-noise-app} is the standard decomposition of stochastic gradients into a coherent mean component plus zero-mean noise. Assumption~\ref{assump:cov-app} does not assume independence across token positions but keeps the cross-token covariance term explicit through $\rho$. 
 
 \begin{proof}[Proof of Theorem~\ref{thm:v_second_moment_main}]
-Write
+By Proposition~\ref{prop:v-exact-app} and Assumption~\ref{assump:mean-noise-app},
 \[
-g_t = \mu + \varepsilon_t,
-\quad
-\mathbb{E}[\varepsilon_t]=0.
-\]
-By Theorem~\ref{thm:v_exact_main},
-\[
-\nabla_{v_s}\mathcal{L}
-=
-\sum_{t=1}^{T} a_{ts}(\mu + \varepsilon_t)
-=
-\Big(\sum_{t=1}^{T} a_{ts}\Big)\mu + \sum_{t=1}^{T} a_{ts}\varepsilon_t
-=
-M_s\mu + \sum_{t=1}^{T} a_{ts}\varepsilon_t.
+    \nabla_{v_s}L = \sum_{t=1}^T a_{ts}(\mu + \varepsilon_t) = \left(\sum_{t=1}^T a_{ts}\right)\mu + \sum_{t=1}^T a_{ts}\varepsilon_t = M_s \mu + \sum_{t=1}^T a_{ts}\varepsilon_t.
 \]
 Therefore,
+\[\begin{aligned}
+    \mathbb{E}\bigl[\|\nabla_{v_s}L\|_2^2\bigr]
+    &= \mathbb{E}\left[\left\|M_s\mu + \sum_{t=1}^T a_{ts}\varepsilon_t\right\|_2^2\right] \\
+    &= M_s^2\|\mu\|_2^2 + 2\,\mathbb{E}\left\langle M_s\mu, \sum_{t=1}^T a_{ts}\varepsilon_t \right\rangle + \mathbb{E}\left\|\sum_{t=1}^T a_{ts}\varepsilon_t\right\|_2^2.
+\end{aligned}\]
+Since $\mathbb{E}[\varepsilon_t]=0$, the cross term vanishes. Expanding the final term gives
 \[
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
-=
-\mathbb{E}\left[\left\|M_s\mu + \sum_{t=1}^{T} a_{ts}\varepsilon_t\right\|_2^2\right].
+    \mathbb{E}\left\|\sum_{t=1}^T a_{ts}\varepsilon_t\right\|_2^2
+    = \sum_{t,t'=1}^T a_{ts} a_{t's} \, \mathbb{E}\langle \varepsilon_t, \varepsilon_{t'} \rangle.
 \]
-Expanding the square gives
-\begin{align*}
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
-&=
-M_s^2\|\mu\|_2^2
-+
-2\,\mathbb{E}\left[\left\langle M_s\mu, \sum_{t=1}^{T} a_{ts}\varepsilon_t \right\rangle\right]
-+
-\mathbb{E}\left[\left\|\sum_{t=1}^{T} a_{ts}\varepsilon_t\right\|_2^2\right].
-\end{align*}
-The cross term vanishes because $\mathbb{E}[\varepsilon_t]=0$:
+Using $\mathbb{E}\langle \varepsilon_t, \varepsilon_{t'} \rangle = \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))$ and splitting diagonal and off-diagonal terms yields Eq.~\eqref{eq:v_second_moment_main}.
+
+Finally, Assumption~\ref{assump:cov-app} implies
 \[
-\mathbb{E}\left[\left\langle M_s\mu, \sum_{t=1}^{T} a_{ts}\varepsilon_t \right\rangle\right]
-=
-M_s\sum_{t=1}^{T} a_{ts}\langle \mu, \mathbb{E}[\varepsilon_t] \rangle
-=
-0.
-\]
-For the remaining term,
-\[
-\left\|\sum_{t=1}^{T} a_{ts}\varepsilon_t\right\|_2^2
-=
-\sum_{t=1}^{T}\sum_{t'=1}^{T} a_{ts} a_{t's} \langle \varepsilon_t, \varepsilon_{t'} \rangle.
-\]
-Taking expectations and using
-\[
-\mathbb{E}[\langle \varepsilon_t, \varepsilon_{t'} \rangle]
-=
-\mathrm{Tr}(\mathbb{E}[\varepsilon_t \varepsilon_{t'}^\top])
-=
-\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t, \varepsilon_{t'})),
-\]
-we obtain
-\begin{align*}
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
-&=
-M_s^2\|\mu\|_2^2
-+
-\sum_{t=1}^{T} a_{ts}^2 \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))
-+
-\sum_{\substack{t,t'=1 \\ t\ne t'}}^{T} a_{ts} a_{t's} \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t, \varepsilon_{t'})).
-\end{align*}
-This proves Eq.~\eqref{eq:v_second_moment_main}.
-Under the stated covariance bounds,
-\[
-\sum_{t=1}^{T} a_{ts}^2 \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))
-\le
-\sigma^2 \sum_{t=1}^{T} a_{ts}^2
-=
-\sigma^2 S_s,
+    \sum_{t=1}^T a_{ts}^2 \, \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t)\bigr) \le \sigma^2 \sum_{t=1}^T a_{ts}^2 = \sigma^2 S_s,
 \]
 and
 \[
-\left|\sum_{\substack{t,t'=1 \\ t\ne t'}}^{T} a_{ts} a_{t's} \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t, \varepsilon_{t'}))\right|
-\le
-\rho \sum_{\substack{t,t'=1 \\ t\ne t'}}^{T} a_{ts} a_{t's}
-=
-\rho(M_s^2 - S_s).
+    \left|\sum_{\substack{t,t'=1 \\ t\neq t'}}^T a_{ts} a_{t's} \, \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'})\bigr)\right|
+    \le \rho \sum_{\substack{t,t'=1 \\ t\neq t'}}^T a_{ts} a_{t's}
+    = \rho(M_s^2 - S_s).
 \]
-Substituting these bounds yields Eq.~\eqref{eq:v_second_moment_bound_main}.
+Combining these bounds proves the theorem.
 \end{proof}
 
-\begin{proposition}[Exact K-side gradient]\label{prop:k_exact_app}
-Define
+\begin{corollary}[Deterministic value-side upper bounds]
+\label{cor:v-deterministic-app}
+For any realization of $\{g_t\}_{t=1}^T$,
 \[
-\beta_{ts} := \langle g_t, v_s - y_t \rangle.
+    \|\nabla_{v_s}L\|_2 \le \sum_{t=1}^T a_{ts}\|g_t\|_2 \le M_s \max_t \|g_t\|_2,
 \]
-Then
-\begin{equation}
-\label{eq:k_exact_app}
-\nabla_{k_s}\mathcal{L}
-=
-\sum_{t=1}^{T} a_{ts} \beta_{ts} \frac{q_t}{\sqrt d}.
-\end{equation}
-\end{proposition}
-
-\begin{proof}
-Since $k_s$ affects only the logits $z_{ts} = \langle q_t, k_s \rangle / \sqrt d$, we have
+and also
 \[
-\frac{\partial z_{ts}}{\partial k_s} = \frac{q_t}{\sqrt d}.
+    \|\nabla_{v_s}L\|_2 \le \sqrt{S_s} \left(\sum_{t=1}^T \|g_t\|_2^2\right)^{1/2}.
 \]
-By the chain rule,
-\[
-\nabla_{k_s}\mathcal{L}
-=
-\sum_{t=1}^{T}
-\left(\frac{\partial z_{ts}}{\partial k_s}\right)^\top
-\frac{\partial \mathcal{L}}{\partial z_{ts}}.
-\]
-Using Lemma~\ref{lem:dy_dz_app},
-\[
-\frac{\partial \mathcal{L}}{\partial z_{ts}}
-=
-\left\langle \nabla_{y_t}\mathcal{L}, \frac{\partial y_t}{\partial z_{ts}} \right\rangle
-=
-\langle g_t, a_{ts}(v_s - y_t) \rangle
-=
-a_{ts}\beta_{ts}.
-\]
-Substituting the two pieces gives
-\[
-\nabla_{k_s}\mathcal{L}
-=
-\sum_{t=1}^{T}
-\left(\frac{q_t}{\sqrt d}\right)(a_{ts}\beta_{ts})
-=
-\sum_{t=1}^{T} a_{ts} \beta_{ts} \frac{q_t}{\sqrt d}.
-\]
-\end{proof}
-
-\begin{proposition}[Exact Q-side gradient and initial-token corollary]\label{prop:q_exact_app}
-For Q-side,
-\begin{equation}
-\label{eq:q_exact_app}
-\nabla_{q_s}\mathcal{L}
-=
-\sum_{j\le s} a_{sj} \beta_{sj} \frac{k_j}{\sqrt d}.
-\end{equation}
-Moreover, if $s$ is the first position under causal attention, then
-\begin{equation}
-\label{eq:q_first_zero_app}
-\nabla_{q_s}\mathcal{L} = 0.
-\end{equation}
-\end{proposition}
-
-\begin{proof}
-The query $q_s$ affects only the logits $\{z_{sj}\}_{j\le s}$, so
-\[
-\nabla_{q_s}\mathcal{L}
-=
-\sum_{j\le s}
-\left(\frac{\partial z_{sj}}{\partial q_s}\right)^\top
-\frac{\partial \mathcal{L}}{\partial z_{sj}}.
-\]
-Since $z_{sj} = \langle q_s, k_j \rangle / \sqrt d$, we have
-\[
-\frac{\partial z_{sj}}{\partial q_s} = \frac{k_j}{\sqrt d}.
-\]
-Using Lemma~\ref{lem:dy_dz_app} with $t=s$,
-\[
-\frac{\partial \mathcal{L}}{\partial z_{sj}}
-=
-\left\langle \nabla_{y_s}\mathcal{L}, \frac{\partial y_s}{\partial z_{sj}} \right\rangle
-=
-\langle g_s, a_{sj}(v_j - y_s) \rangle
-=
-a_{sj}\beta_{sj}.
-\]
-Therefore,
-\[
-\nabla_{q_s}\mathcal{L}
-=
-\sum_{j\le s} \frac{k_j}{\sqrt d} \, a_{sj}\beta_{sj}
-=
-\sum_{j\le s} a_{sj}\beta_{sj}\frac{k_j}{\sqrt d}.
-\]
-If $s$ is the first position, causal masking forces that row to attend only to itself, so $a_{ss}=1$ and $y_s = v_s$.
-Hence $\beta_{ss} = \langle g_s, v_s - y_s \rangle = 0$, and Eq.~\eqref{eq:q_exact_app} reduces to $\nabla_{q_s}\mathcal{L}=0$.
-\end{proof}
-
-
-\section{Additional theory for Section~\ref{sec:pressure_reshape}}\label{app:pressure_reshape}
-
-This appendix records the auxiliary results used in Section~\ref{sec:pressure_reshape}.  
-The point of these results is not to prove a full causal statement GS $\Rightarrow$ MA, but to formalize two weaker claims used in the main text:
-(i) RMSNorm attenuates backward signals more strongly when the incoming activation norm is large, and
-(ii) net residual-stream \emph{Change} staying near $1$ means that large branch-local pressure is not simply converted into equally large gradient amplification across depth.
-
-\subsection{RMSNorm as a local gradient-compression operator}\label{app:rms_compress_sec4}
-
-We use the standard RMSNorm map \citep{zhang2019rmsnorm}
-\[
-\mathrm{RMSNorm}(x)
-=
-\gamma \odot \frac{x}{\rms(x)},
-\quad
-\rms(x) := \sqrt{\frac{1}{d}\|x\|_2^2 + \epsilon}.
-\]
-For simplicity of presentation, we suppress $\epsilon$ in the symbolic derivation below; the same conclusion continues to hold with the usual stabilizer.
-
-\begin{proposition}[Exact Jacobian of RMSNorm]\label{prop:rms_jac_sec4}
-Let $r := \rms(x)$ and $D := \mathrm{diag}(\gamma)$. Then the Jacobian of
-$y = \mathrm{RMSNorm}(x)$ is
-\[
-J_{\mathrm{rms}}(x)
-=
-\frac{1}{r}D - \frac{1}{r^3 d}Dxx^\top.
-\]
-\end{proposition}
-
-\begin{proof}
-Since $y = D(x/r)$, differentiating gives
-\[
-\frac{\partial y}{\partial x}
-=
-D\left(\frac{1}{r}I + x\frac{\partial (1/r)}{\partial x}\right).
-\]
-Using
-\[
-\frac{\partial r}{\partial x} = \frac{x^\top}{dr},
-\quad
-\frac{\partial (1/r)}{\partial x} = -\frac{x^\top}{dr^3},
-\]
-we obtain
-\[
-J_{\mathrm{rms}}(x)
-=
-\frac{1}{r}D - \frac{1}{r^3 d}Dxx^\top.
-\]
-\end{proof}
-
-\begin{corollary}[Activation-dependent compression]\label{cor:rms_compress_sec4}
-Let $g_y = \nabla_y \mathcal{L}$ be the upstream gradient at the RMSNorm output. Then
-\[
-\nabla_x \mathcal{L} = J_{\mathrm{rms}}(x)^\top g_y,
-\]
-and the operator norm satisfies
-\[
-\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
-\le
-\frac{2\|\gamma\|_\infty}{\rms(x)}.
-\]
-Consequently,
-\[
-\|\nabla_x \mathcal{L}\|_2
-\le
-\frac{2\|\gamma\|_\infty}{\rms(x)}\,\|g_y\|_2.
-\]
-In particular, larger incoming activation norm implies stronger local attenuation of backpropagated gradients.
 \end{corollary}
 
 \begin{proof}
-The chain-rule identity is immediate. Using Proposition~\ref{prop:rms_jac_sec4},
+The first bound follows from Proposition~\ref{prop:v-exact-app} and the triangle inequality. The second follows from Cauchy-Schwarz:
 \[
-\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
-\le
-\frac{1}{r}\|D\|_{\mathrm{op}} + \frac{1}{r^3 d}\|Dxx^\top\|_{\mathrm{op}}.
+    \left\|\sum_{t=1}^T a_{ts} g_t\right\|_2
+    \le \left(\sum_{t=1}^T a_{ts}^2\right)^{1/2} \left(\sum_{t=1}^T \|g_t\|_2^2\right)^{1/2}.
 \]
-Now $\|D\|_{\mathrm{op}} = \|\gamma\|_\infty$ and
-\[
-\|Dxx^\top\|_{\mathrm{op}} = \|Dx\|_2\,\|x\|_2 \le \|\gamma\|_\infty \|x\|_2^2.
-\]
-Therefore,
-\[
-\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
-\le
-\frac{\|\gamma\|_\infty}{r}
-\left(1 + \frac{\|x\|_2^2}{dr^2}\right).
-\]
-Since $r^2 \ge \|x\|_2^2/d$, the parenthesized term is at most $2$, yielding the stated bound. The final gradient inequality follows immediately.
 \end{proof}
 
-\subsection{Why \emph{Change} near 1 indicates preserved residual-stream gradient scale}\label{app:change_near_one_sec4}
-We now show that the quantity called \emph{Change} in the main text is the correct net residual-stream diagnostic.
 
-\paragraph{Attention block.}
-Recall that
-\[
-h_t^{\ell+\frac12} = h_t^{\ell} + r_t^{\mathrm{attn},\ell}.
-\]
-Hence the total gradient at the pre-attention residual state decomposes as
-\[
-G(h_t^{\ell})
-=
-G(h_t^{\ell+\frac12}) + \Delta_t^{\mathrm{attn}},
-\quad
-\Delta_t^{\mathrm{attn}} := G(h_t^{\ell}) - G(h_t^{\ell+\frac12}).
-\]
-By the definitions in Section~\ref{subsec:prelim_backward_obs},
-\[
-\mathrm{Bloat}_t^{\mathrm{attn},\ell}
-\cdot
-\mathrm{Compress}_t^{\mathrm{attn},\ell}
-=
-\frac{\|\Delta_t^{\mathrm{attn}}\|_2}{\|G(h_t^{\ell+\frac12})\|_2}.
-\]
-Therefore the product of Bloat and Compress is exactly the relative norm of the branch contribution compared with the outgoing residual-stream gradient.
+\subsection{Deterministic Bounds for the Key and Query Pathways}\label{app:theory:kq}
+The main theorem concerns the value path. This subsection provides supporting bounds for the key and query pathways and clarifies the asymmetry.
 
-\begin{proposition}[Residual perturbation bound for attention \emph{Change}]\label{prop:change_bound_attn}
-For every token $t$ and layer $\ell$,
+\begin{assumption}[Uniform boundedness for the key-side bound]\label{assump:k-bounded-app}
+There exist constants $Q_{\max}, B_{\max} > 0$ such that for all $t$,
 \[
-\left|\mathrm{Change}_t^{\mathrm{attn},\ell} - 1\right|
-\le
-\mathrm{Bloat}_t^{\mathrm{attn},\ell}
-\cdot
-\mathrm{Compress}_t^{\mathrm{attn},\ell}.
+    \|q_t\|_2 \le Q_{\max},
+    \quad
+    |\beta_{ts}| \le B_{\max}.
 \]
-Equivalently,
+\end{assumption}
+
+\begin{theorem}[Deterministic key-side upper bound]\label{thm:k-bound-app}
+Under Assumption~\ref{assump:k-bounded-app}, we have
 \[
-\left|\frac{\|G(h_t^{\ell})\|_2}{\|G(h_t^{\ell+\frac12})\|_2} - 1\right|
-\le
-\frac{\|G(h_t^{\ell}) - G(h_t^{\ell+\frac12})\|_2}{\|G(h_t^{\ell+\frac12})\|_2}.
+    \|\nabla_{k_s}L\|_2 \le \frac{Q_{\max} B_{\max}}{\sqrt{d}} M_s.
+\]
+\end{theorem}
+
+\begin{proof}
+Starting from Proposition~\ref{prop:k-exact-app} and applying the triangle inequality,
+\[
+    \|\nabla_{k_s}L\|_2
+    = \left\|\sum_{t=1}^T a_{ts}\beta_{ts} \frac{q_t}{\sqrt{d}}\right\|_2
+    \le \sum_{t=1}^T a_{ts}|\beta_{ts}|\frac{\|q_t\|_2}{\sqrt{d}}.
+\]
+Using $a_{ts}\ge 0$, $|\beta_{ts}|\le B_{\max}$, and $\|q_t\|_2\le Q_{\max}$ gives the result.
+\end{proof}
+
+\begin{lemma}[Row-sum-zero of logits gradients]\label{lem:row-sum-zero-app}
+For a fixed row $s$, we have
+\[
+    \sum_{j \le s} \frac{\partial L}{\partial z_{sj}} = 0.
+\]
+\end{lemma}
+
+\begin{proof}
+The derivation above gives $\frac{\partial L}{\partial z_{sj}} = a_{sj}\langle g_s, v_j - y_s\rangle$. Therefore, we have
+\[\begin{aligned}
+    \sum_{j \le s} \frac{\partial L}{\partial z_{sj}}
+    &= \left\langle g_s, \sum_{j \le s} a_{sj}(v_j - y_s) \right\rangle \\
+    &= \left\langle g_s, \sum_{j \le s} a_{sj}v_j - y_s \sum_{j \le s} a_{sj} \right\rangle \\
+    &= \langle g_s, y_s - y_s \rangle = 0.
+\end{aligned}\]
+\end{proof}
+
+\begin{assumption}[Bounded advantage and bounded key dispersion]\label{assump:q-bounded-app}
+Let
+\[
+    \bar{k}_s := \sum_{j \le s} a_{sj} k_j.
+\]
+There exist constants $B_{\max}^{(Q)}, \Delta K_{\max} > 0$ such that for all $j \le s$,
+\[
+    |\beta_{sj}| \le B_{\max}^{(Q)},
+    \quad
+    \|k_j - \bar{k}_s\|_2 \le \Delta K_{\max}.
+\]
+\end{assumption}
+
+\begin{theorem}[Deterministic query-side upper bound in dispersion form]\label{thm:q-bound-app}
+Under Assumption~\ref{assump:q-bounded-app},
+\[
+    \|\nabla_{q_s}L\|_2 \le \frac{B_{\max}^{(Q)} \Delta K_{\max}}{\sqrt{d}}.
+\]
+Moreover, under causal attention, $\nabla_{q_1}L = 0$ exactly.
+\end{theorem}
+
+\begin{proof}
+Using Lemma~\ref{lem:row-sum-zero-app}, for any vector $\bar{k}_s$ we have
+\[
+    \sum_{j \le s} \frac{\partial L}{\partial z_{sj}}\bar{k}_s = \bar{k}_s \sum_{j \le s} \frac{\partial L}{\partial z_{sj}} = 0.
+\]
+Hence the exact query-side gradient can be rewritten as
+\[
+    \nabla_{q_s}L
+    = \frac{1}{\sqrt{d}} \sum_{j \le s} \frac{\partial L}{\partial z_{sj}} (k_j - \bar{k}_s)
+    = \frac{1}{\sqrt{d}} \sum_{j \le s} a_{sj}\beta_{sj}(k_j - \bar{k}_s).
+\]
+Taking norms and applying the triangle inequality yields
+\[
+    \|\nabla_{q_s}L\|_2
+    \le \frac{1}{\sqrt{d}} \sum_{j \le s} a_{sj}|\beta_{sj}|\,\|k_j - \bar{k}_s\|_2.
+\]
+Using $\sum_{j \le s} a_{sj}=1$, together with Assumption~\ref{assump:q-bounded-app}, proves the bound.
+The statement for $s=1$ was already established in Proposition~\ref{prop:q-exact-app}.
+\end{proof}
+
+\subsection{RMSNorm as a Gradient-Compression Mechanism}
+\label{app:theory:rmsnorm}
+
+This subsection formalizes the mechanism used in Section~\ref{sec:pressure_reshape} to explain why large token norms can reduce backpropagated gradient magnitude in a pre-norm Transformer.
+
+For $x \in \mathbb{R}^d$ and gain vector $\gamma \in \mathbb{R}^d$, define
+\[
+    \mathrm{rms}(x) := \sqrt{\frac{1}{d}\sum_{i=1}^d x_i^2},
+    \quad
+    \mathrm{RMSNorm}(x) := \gamma \odot \frac{x}{\mathrm{rms}(x)}.
+\]
+Denote $r := \mathrm{rms}(x)$, $D := \mathrm{diag}(\gamma)$, and $y := \mathrm{RMSNorm}(x)$.
+
+\begin{proposition}[Exact Jacobian of RMSNorm]
+\label{prop:rms-jac-app}
+The Jacobian $J_{\mathrm{rms}}(x) := \partial y / \partial x \in \mathbb{R}^{d\times d}$ is
+\[
+    J_{\mathrm{rms}}(x) = \frac{1}{r}D - \frac{1}{r^3 d} D x x^\top.
 \]
 \end{proposition}
 
 \begin{proof}
-Using the reverse triangle inequality,
+Since $y = D(x/r)$, we have
 \[
-\big|\|u+v\|_2 - \|u\|_2\big| \le \|v\|_2.
+    \frac{\partial y}{\partial x} = D\left(\frac{1}{r}I + x\,\frac{\partial}{\partial x}\left(\frac{1}{r}\right)\right).
 \]
-Set $u = G(h_t^{\ell+\frac12})$ and $v = \Delta_t^{\mathrm{attn}}$. Then
-\[
-\big|\|G(h_t^{\ell})\|_2 - \|G(h_t^{\ell+\frac12})\|_2\big|
-\le
-\|\Delta_t^{\mathrm{attn}}\|_2.
-\]
-Dividing by $\|G(h_t^{\ell+\frac12})\|_2$ yields the claim.
+Now $\frac{\partial}{\partial x}\left(\frac{1}{r}\right) = -\frac{1}{r^2}\frac{\partial r}{\partial x} = -\frac{1}{r^3 d}x^\top$ gives the stated formula.
 \end{proof}
 
-This result explains the interpretation used in the main text.  
-If \emph{Bloat} is large but \emph{Change} remains near $1$, then the branch has generated a strong token-specific perturbation internally, yet the net gradient norm that continues along the residual stream is still approximately preserved.
+\begin{corollary}[RMSNorm compresses gradients as $\|x\|$ grows]
+\label{cor:rms-compress-app}
+Let $\nabla_y L$ be the upstream gradient at the RMSNorm output. Then the operator norm is bounded by 
+\[
+    \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{r}\left(1 + \frac{\|x\|_2^2}{dr^2}\right) \le \frac{2\|\gamma\|_\infty}{r},
+\]
+and therefore we have
+\[
+    \|\nabla_x L\|_2 \le \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}\,\|\nabla_y L\|_2 \lesssim \frac{1}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
+\]
+\end{corollary}
 
-\paragraph{MLP block.}
-The same argument applies to
+\begin{proof}
+The chain rule gives $\nabla_x L = J_{\mathrm{rms}}(x)^\top\nabla_y L$. For the operator norm, Proposition~\ref{prop:rms-jac-app} implies
 \[
-h_t^{\ell+1} = h_t^{\ell+\frac12} + r_t^{\mathrm{mlp},\ell}.
+    \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
+    \le \frac{1}{r}\|D\|_{\mathrm{op}} + \frac{1}{r^3 d}\|Dxx^\top\|_{\mathrm{op}}.
 \]
-Define
+Since $\|D\|_{\mathrm{op}} = \|\gamma\|_\infty$ and $\|Dxx^\top\|_{\mathrm{op}} = \|Dx\|_2\|x\|_2 \le \|D\|_{\mathrm{op}}\|x\|_2^2$, we obtain
 \[
-\Delta_t^{\mathrm{mlp}} := G(h_t^{\ell+\frac12}) - G(h_t^{\ell+1}).
+    \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{r}\left(1 + \frac{\|x\|_2^2}{dr^2}\right).
 \]
-Then
+Finally, $r^2 = \|x\|_2^2/d$ gives the bound by $2\|\gamma\|_\infty/r$.
+\end{proof}
+
+\begin{proposition}[Activation norm as a sufficient condition for bounded backpropagated gradients]\label{prop:required-rms-app}
+Fix a target gradient scale $\tau > 0$. A sufficient condition for $\|\nabla_x L\|_2 \le \tau$ is
 \[
-\mathrm{Bloat}_t^{\mathrm{mlp},\ell}
-\cdot
-\mathrm{Compress}_t^{\mathrm{mlp},\ell}
-=
-\frac{\|\Delta_t^{\mathrm{mlp}}\|_2}{\|G(h_t^{\ell+1})\|_2},
+    \mathrm{rms}(x) \ge \frac{2\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
 \]
-and exactly the same proof gives
+Thus, for fixed $\tau$ and gain $\gamma$, a larger upstream gradient requires a larger input RMS to keep the backward signal bounded.
+\end{proposition}
+
+\begin{proof}
+By Corollary~\ref{cor:rms-compress-app}, we have
 \[
-\left|\mathrm{Change}_t^{\mathrm{mlp},\ell} - 1\right|
-\le
-\mathrm{Bloat}_t^{\mathrm{mlp},\ell}
-\cdot
-\mathrm{Compress}_t^{\mathrm{mlp},\ell}.
+    \|\nabla_x L\|_2 \le \frac{2\|\gamma\|_\infty}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
+\]
+To make the right-hand side at most $\tau$, it suffices that
+\[
+    \mathrm{rms}(x) \ge \frac{2\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
+\]
+\end{proof}
+
+Proposition~\ref{prop:required-rms-app} means that in a pre-norm Transformer, if a token receives unusually large gradient pressure, increasing its token-wise activation norm provides a direct channel for reducing the gradient magnitude passed to earlier layers. This is the mathematical sense in which massive activations can act as a gradient-compression response.
+
+\subsection{V-scale Jacobian and Gradient Attenuation}\label{app:theory:vscale}
+We now analyze the V-scale map used in Section~\ref{sec:vscale}. On the pre-projection value state $v$, define
+\[
+    \hat{v} = \phi(r) v,
+    \quad
+    r := \|v\|_2^2,
+    \quad
+    \phi(r) := \frac{r}{r+C},
+    \quad
+    C>0.
 \]
 
-\subsection{A minimal sufficient-condition view}\label{app:minimal_sufficient_sec4}
-The previous corollary already gives the local mechanism used in the main text: if the incoming residual norm is large, then RMSNorm attenuates gradients more strongly.  
-A very small additional step turns this into the ``why large activation aligns with strong compression'' statement.
-
-\begin{proposition}[Large activation as a sufficient condition for bounded local backward sensitivity]\label{prop:need_activation_sec4}
-Let $x$ be the input to an RMSNorm layer and $y = \mathrm{RMSNorm}(x)$.  
-If we require a target bound
+\begin{proposition}[Exact Jacobian of V-scale]
+\label{prop:vscale-jac-app}
+The Jacobian $J_\phi(v) := \partial \hat{v} / \partial v$ is
 \[
-\|\nabla_x \mathcal{L}\|_2 \le \tau
-\]
-for some prescribed stability scale $\tau > 0$, then a sufficient condition is
-\[
-\rms(x)
-\ge
-\frac{2\|\gamma\|_\infty}{\tau}\,\|\nabla_y \mathcal{L}\|_2.
+    J_\phi(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top.
 \]
 \end{proposition}
 
 \begin{proof}
-Immediate from Corollary~\ref{cor:rms_compress_sec4} by rearranging
+Since $\hat{v} = \phi(r)v$ and $r = v^\top v$, we have
 \[
-\|\nabla_x \mathcal{L}\|_2
-\le
-\frac{2\|\gamma\|_\infty}{\rms(x)}\,\|\nabla_y \mathcal{L}\|_2.
+    \frac{\partial \hat{v}}{\partial v}
+    = \phi(r)I + v\left(\frac{\partial \phi(r)}{\partial v}\right)^\top.
 \]
+Since $\phi'(r) = \frac{C}{(r+C)^2}$ and $\frac{\partial r}{\partial v} = 2v$, 
+substituting
+\[
+    \frac{\partial \phi(r)}{\partial v} = \phi'(r)\frac{\partial r}{\partial v} = \frac{2C}{(r+C)^2}v
+\]
+yields the claim.
 \end{proof}
 
-This proposition should be interpreted only as a sufficient-condition statement.  
-It does not prove that the network must create a massive activation whenever gradient pressure is large.  
-What it shows is weaker and precisely matched to the main text: larger activation norm provides a direct route to stronger local gradient attenuation in pre-norm architectures.
+Now we can prove Proposition~\ref{prop:vscale_main}.
+\begin{proof}[Proof of Proposition~\ref{prop:vscale_main}]
+Because $vv^\top$ is rank one, for any $u\perp v$ we have $vv^\top u = 0$, so Proposition~\ref{prop:vscale-jac-app} gives $J_\phi(v)u = \phi(r)u$. Along the radial direction,
+\[
+    J_\phi(v)v = \phi(r)v + \frac{2C}{(r+C)^2}vv^\top v = \left(\phi(r) + \frac{2Cr}{(r+C)^2}\right)v.
+\]
+This proves the eigenvalue formulas.
 
+For the maximum, define $f(r) := \lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$.
+Direct differentiation shows that $f'(r)=0$ at $r=3C$, and substituting this value gives $f(3C)=9/8$.
+\end{proof}
 
+\begin{proof}[Proof of Corollary~\ref{cor:vscale_main}]
+The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operator norm equals its largest eigenvalue, which is $\lambda_\parallel(r)$ by Proposition~\ref{prop:vscale_main}. The small-$r$ expansion follows directly from the expression for $\lambda_\parallel(r)$.
+\end{proof}
+
+These results means that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
+
+\subsection{Supporting Result for Value-State Drain}
+\label{app:theory:vsd}
+The main paper does not require a full theorem for value-state drain. Nevertheless, it is useful to isolate a principled sufficient mechanism under which stronger sink statistics make nonzero sink values more expensive.
+
+Consider varying only the sink value $v_s$ while holding $Q$, $K$, and the other values fixed. Write
+\[
+    y_t(v_s) = m_t v_s + r_t,
+    \quad
+    m_t := a_{ts},
+    \quad
+    r_t := \sum_{\substack{j\le t \\ j\neq s}} a_{tj}v_j.
+\]
+Then the induced change in head output is
+\[
+    \Delta o_t = m_t W_O \Delta v_s.
+\]
+
+\begin{definition}[Task-aligned drive]
+\label{def:task-drive-app}
+Under a local quadratic approximation in $v_s$, we write
+\[
+    L(v_s) \approx \mathrm{const} + \langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s,
+\]
+where
+\[
+    b = \sum_{t=1}^T m_t W_O^\top \gamma_t,
+    \quad
+    A = \sum_{t=1}^T m_t^2 W_O^\top H_t W_O.
+\]
+We call $\|b\|_2$ the \emph{task-aligned drive}, which measures the first-order incentive to make $v_s$ nonzero.
+\end{definition}
+
+\begin{assumption}[Local quadratic model in head outputs]
+\label{assump:quadratic-app}
+There exist vectors $\gamma_t \in \mathbb{R}^{d_{\mathrm{model}}}$ and symmetric positive semidefinite matrices $H_t \succeq 0$ such that for the perturbations $\{\Delta o_t\}$,
+\[
+    L(\{\Delta o_t\}) = L_0 + \sum_{t=1}^T \langle \gamma_t, \Delta o_t\rangle + \frac{1}{2}\sum_{t=1}^T \Delta o_t^\top H_t \Delta o_t + o(\|\Delta o\|^2).
+\]
+\end{assumption}
+
+\begin{theorem}[Curvature-based shrinkage of sink values]
+\label{thm:as-to-vsd-app}
+Assume Assumption~\ref{assump:quadratic-app}. Suppose further that there exists $\mu>0$ such that $H_t \succeq \mu I$ for all $t$, and that the output projection is nondegenerate on the head subspace with minimum singular value $\sigma_{\min}(W_O)>0$. Then
+\[
+    A \succeq \mu \left(\sum_{t=1}^T m_t^2\right) W_O^\top W_O = \mu S_s W_O^\top W_O.
+\]
+Hence the quadratic approximation has unique minimizer $v_s^\star = -A^{-1}b$, and we have
+\[
+    \|v_s^\star\|_2 \le \frac{\|b\|_2}{\mu S_s \sigma_{\min}(W_O)^2}.
+\]
+In particular, when the task-aligned drive $\|b\|_2$ is small, stronger sink structure (larger $S_s$) forces the quadratic minimizer toward smaller value norm.
+\end{theorem}
+
+\begin{proof}
+Substituting $\Delta o_t = m_t W_O\Delta v_s$ into Assumption~\ref{assump:quadratic-app} yields the quadratic form in Definition~\ref{def:task-drive-app}. Since each $H_t \succeq \mu I$,
+\[
+    W_O^\top H_t W_O \succeq \mu W_O^\top W_O.
+\]
+Summing with weights $m_t^2$ gives
+\[
+    A = \sum_{t=1}^T m_t^2 W_O^\top H_t W_O \succeq \mu \sum_{t=1}^T m_t^2 W_O^\top W_O = \mu S_s W_O^\top W_O.
+\]
+Since $\sigma_{\min}(W_O)>0$, this lower bound implies $A \succ 0$. Therefore the quadratic objective is strictly convex and has unique minimizer determined by
+\[
+    \nabla_{v_s}\left(\langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s\right) = b + Av_s = 0,
+\]
+so we have $v_s^\star = -A^{-1}b$ and
+\[
+    \|v_s^\star\|_2 \le \|A^{-1}\|_{\mathrm{op}}\,\|b\|_2 = \frac{\|b\|_2}{\lambda_{\min}(A)}.
+\]
+Since $A \succeq \mu S_s W_O^\top W_O$, we have
+\[
+    \lambda_{\min}(A) \ge \mu S_s\,\lambda_{\min}(W_O^\top W_O) = \mu S_s\,\sigma_{\min}(W_O)^2,
+\]
+which proves the stated bound.
+\end{proof}
+
+This theorem is intentionally positioned as a supporting mechanism. It shows that, under a local curvature model, stronger sink structure increases the curvature penalty on the value state of sink tokens, making a small-norm solution favorable unless the first-order task drive is strong enough to offset that penalty.
 
 \end{document}
