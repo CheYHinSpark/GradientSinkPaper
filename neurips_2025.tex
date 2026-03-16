@@ -114,16 +114,7 @@ A pre-norm block updates the sequence as
 % x\in\mathbb{R}^{d_{\mathrm{model}}},
 % \end{equation}
 % where $\gamma\in\mathbb{R}^{d_{\mathrm{model}}}$ is learnable and $\epsilon>0$ is for numerical stability \citep{zhang2019rmsnorm}.
-
-The attention block can be either multi-head attention (MHA) \citep{vaswani2017attention} or a variant such as grouped-query attention (GQA) \citep{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. That is, we write the query state as $q_t=q_t^{\ell,h}$ and similarly for other per-head variables. Let the head dimension be $d$. With RoPE, the query, key, and value states at token position $t$ are
-\begin{equation}\label{eq:qkv_def}
-    q_t = R_t W_Q \widetilde h_t,
-    \quad
-    k_t = R_t W_K \widetilde h_t,
-    \quad
-    v_t = W_V \widetilde h_t,
-\end{equation}
-where $\widetilde h_t$ is the normalized token representation and $R_t\in\mathbb{R}^{d\times d}$ is the RoPE rotation matrix. Then the causal attention logits and weights are
+The attention block can be either multi-head attention (MHA) \citep{vaswani2017attention} or a variant such as grouped-query attention (GQA) \citep{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. That is, we write the query state as $q_t=q_t^{\ell,h}$ and similarly for other per-head variables. Let the head dimension be $d$. With RoPE, the query, key, and value states at token position $t$ are $q_t = R_t W_Q \widetilde h_t$, $k_t = R_t W_K \widetilde h_t$, and $v_t = W_V \widetilde h_t$, where $\widetilde h_t$ is the normalized token representation and $R_t\in\mathbb{R}^{d\times d}$ is the RoPE rotation matrix. Then the causal attention logits and weights are
 \begin{equation}\label{eq:attn_logits_weights}
 z_{tj}=\frac{\langle q_t,k_j\rangle}{\sqrt d}+m_{tj},
 \quad
@@ -135,22 +126,16 @@ m_{tj}=\begin{cases}
 -\infty, & j>t.
 \end{cases}
 \end{equation}
-Finally the value aggregation and head output are
-\begin{equation}
-\label{eq:attn_output}
-y_t = \sum_{j\le t} a_{tj} v_j,
-\quad
-o_t = W_O y_t.
-\end{equation}
+Finally we have the value aggregation $y_t = \sum_{j\le t} a_{tj} v_j$ and head output $o_t = W_O y_t$.
 
-\paragraph{Metrics for Attention Sinks and Massive Activations.}
-We define the forward-pass quantities used to track AS and MA. For a candidate sink position $s$ (typically the first token), we follow \citep{gu2025when,queipo-de-llano2026attention} and use thresholded criteria to count sink-like behavior:
+\paragraph{Forward metrics for Attention Sinks and Activations.}
+For a candidate sink position $s$ (typically the first token), we follow \citep{gu2025when,queipo-de-llano2026attention} and use thresholded criteria to count sink-like behavior:
 \begin{equation}\label{eq:sink_rate}
     \text{Sink}_s^{\epsilon,\ell} = \frac{1}{H} \sum_{h=1}^H \mathbb{I}(\alpha_s^{\ell,h} > \epsilon),
     \quad
     \alpha_s^{\ell,h}=\frac{1}{T_\epsilon}\sum_{t=s}^{s+T_\epsilon-1} a_{ts}^{\ell,h},
 \end{equation}
-where $\epsilon$ is a predefined threshold. $H$ is the number of attention heads in each layer. Following prior work we set $\epsilon=0.3$ and $T_\epsilon=64$ \citep{gu2025when}. In this paper, for theory and training dynamics measurements, we also introduce the following simpler column statistics:
+where $H$ is the number of attention heads in each layer. Following prior work we set the threshold $\epsilon=0.3$ and $T_\epsilon=64$ \citep{gu2025when}. In this paper, for theory and training dynamics measurements, we also introduce the following simpler column statistics:
 \begin{equation}\label{eq:sink_mass}
 \overline M_s^{\ell,h} := \frac{M_s^{\ell,h}}{T-s+1} = \frac{1}{T-s+1} \sum_{t=s}^{T} a_{ts}^{\ell,h},
 \quad
@@ -168,7 +153,6 @@ Let $\mathcal{L}$ denote the training loss. For any token-indexed tensor $z=(z_1
 \begin{equation}\label{eq:token_grad}
 G(z_t) := \nabla_{z_t}\mathcal{L}.
 \end{equation}
-
 Recalling that $h_t^{\ell+\frac{1}{2}} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ for the attention block, we have $G(r_t^{\mathrm{attn},\ell}) = G(h_t^{\ell+\frac{1}{2}})$. Moreover, the difference $G(h_t^\ell) - G(h_t^{\ell+\frac{1}{2}})$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path.
 We then define three ratios by
 \begin{equation}\label{eq:ratios_attn}
@@ -182,7 +166,6 @@ We then define three ratios by
 \end{aligned}
 \end{equation}
 Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ in the same way for MLP branch.
-
 The terminology is chosen to match the observation we later show. Bloat measures gradient expansion before the residual contribution reaches the pre-norm token representation in an Attention or MLP branch. Compress measures the attenuation introduced by RMSNorm on that branch contribution. Change measures the net gradient-norm ratio across the residual transition.
 
 \section{From Attention Sink to Gradient Sink}\label{sec:as_to_gs}
@@ -220,7 +203,7 @@ We begin with forward observables.
 Unless otherwise stated, these statistics are averaged over the full evaluation batches, and the AS metrics are additionally averaged over heads.
 Figure~\ref{fig:baseline_forward_main} summarizes the forward patterns. 
 For each plot, we compare the sink token (token 0) with the mean and maximum of the other early tokens, which refer to token positions 1 to 15. 
-In both model sizes, token 0 separates sharply from the other early tokens in the early and middle layers on both Sink Mass $\overline M_s^\ell$ Eq.~\eqref{eq:sink_mass} and $\mathrm{Sink}_s^{\epsilon}$ Eq.~\eqref{eq:sink_rate}. 
+In both model sizes, token 0 separates sharply from the other early tokens in the early and middle layers on both Sink Mass $\overline M_s^\ell$ Eq.~\eqref{eq:sink_mass} and $\mathrm{Sink}_s^{\epsilon,\ell}$ Eq.~\eqref{eq:sink_rate}. 
 The activation statistics show a matching pattern. 
 On the residual-stream output, token 0 develops a broad elevation across a wide band of middle-to-late layers, whereas the other early tokens increase much more gradually. 
 The MLP outputs indicate that the most extreme amplification is produced at specific MLP blocks rather than uniformly across the network.
@@ -274,12 +257,7 @@ Let $g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}$ denote t
 This identity already exposes the mechanism: the gradient on $v_s$ is an attention-weighted sum of all upstream gradients whose outputs read value from token $s$.. If many later tokens attend to token $s$, then many later gradients also pass through $v_s$. A convenient quantitative version follows from a mean-plus-noise decomposition $g_t = \mu + \varepsilon_t$ for stochastic gradients \citep{mandt2017sgd, mccandlish2018noise}.
 
 \begin{theorem}[V-side gradient control by sink statistics]\label{thm:v_second_moment_main}
-Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and
-\[
-\big|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))\big| \le \rho
-\qquad \text{for all } t \ne t'.
-\]
-Then
+Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))| \le \rho$ for all $t \ne t'$. Then we have
 \begin{equation}
 \label{eq:v_second_moment_main}
 \mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
@@ -393,22 +371,8 @@ The empirical alignment between massive activations and strong compression is no
 It follows from a basic property of RMSNorm.
 
 \begin{theorem}[Activation-dependent compression under RMSNorm]\label{thm:rms_compress_main}
-Let
-\[
-y=\mathrm{RMSNorm}(x)
-=
-\gamma \odot \frac{x}{\rms(x)},
-\quad
-\rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon},
-\]
-and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
-Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian operator norm satisfies
-\begin{equation}
-\label{eq:rms_operator_main}
-\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
-\le
-\frac{2\|\gamma\|_\infty}{\rms(x)}.
-\end{equation}
+Denote $y=\mathrm{RMSNorm}(x) = \gamma \odot \frac{x}{\rms(x)}$ with $\rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon}$, and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
+Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian satisfies $\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{2\|\gamma\|_\infty}{\rms(x)}$.
 Consequently, we have
 \begin{equation}
 \label{eq:rms_grad_bound_main}
@@ -421,23 +385,23 @@ Consequently, we have
 \end{theorem}
 
 The proof is deferred to Appendix~\ref{app:rms_compress_sec4}.
-The theorem formalizes a key intuition used throughout this section that larger incoming activation norm provides a direct route to stronger local attenuation of backpropagated gradients.
+The theorem formalizes a key intuition that larger incoming activation norm provides a direct route to stronger local attenuation of backpropagated gradients.
 
 In total, we observe that localized gradients are not merely large but selectively processed by pre-norm computation.
 In the attention branch, the sink token exhibits strong branch-local amplification, strong normalization-induced attenuation, and only limited net gradient change.
-These results support an interpretation that massive activations are consistent with a mechanism that attenuates localized gradient pressure through RMSNorm.
+These results support an interpretation that massive activations attenuate localized gradient pressure through RMSNorm.
 
 \section{V-scale: A Value-Path Gradient Valve}\label{sec:vscale}
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily a response to localized gradient pressure, then reducing that pressure should weaken MA even when AS is largely preserved.
-This section implements that prediction.
+This section implements this prediction.
 
 Several recent architectural variants mitigate extreme token phenomena like MA and AS by changing the attention nonlinearity, inserting dedicated gates, or modifying normalization structure \citep{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
-These results show that MA and AS are removable and seperable, but such changes strongly alter the forward geometry and therefore do not cleanly test the specific prediction of our backward-mechanism hypothesis. 
-Here we instead seek a modification that is mathematically transparent, remains close to the original Llama-like model, and primarily targets the dominant value-path backward channel identified in Section~\ref{sec:as_to_gs}.
+These changes strongly alter the forward geometry and therefore do not cleanly test the specific prediction of our backward-mechanism hypothesis. 
+Here we instead seek a modification that is mathematically transparent and remains close to the original Llama-like model.
 
-The value path is the natural target for two reasons.
-First, our backward observations confirm that V-side gradient norms of sink token are several times larger than K-side ones. 
-Second, prior work has repeatedly observed \emph{value-state drain}, where sink tokens tend to have unusually small value norms \citep{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
+The value path is the natural target backward channel for two reasons.
+First, our backward observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of sink token are several times larger than key-path ones. 
+Second, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms \citep{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
 We observe the same pattern as shown in Figure~\ref{fig:value_state_drain}, and are inspired by this useful structural prior: if sink values are already small, then a radial transform depending on $\|v\|_2$ can target sink tokens selectively.
 
 \begin{figure*}[tb]
@@ -455,39 +419,26 @@ We observe the same pattern as shown in Figure~\ref{fig:value_state_drain}, and 
 \end{figure*}
 
 \subsection{Definition and Design Intuition}
-For each attention head, after the standard value projection and before value aggregation, we replace
-\[
-y_t = \sum_{j\le t} a_{tj} v_j
-\]
-by
+For each attention head, after the standard value projection and before value aggregation, we replace $y_t = \sum_{j\le t} a_{tj} v_j$ by
 \begin{equation}
 \label{eq:vscale_forward}
 \hat v_j = \phi(\|v_j\|_2^2)\, v_j,
-\qquad
+\quad
 \phi(r)=\frac{r}{r+C},
-\qquad
+\quad
 \hat y_t = \sum_{j\le t} a_{tj} \hat v_j,
 \end{equation}
-where $C>0$ is a scale parameter. We call this modification \emph{V-scale}.
+where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, illustrated in Figure~\ref{fig:architecture_and_loss} (left).
 
-Figure~\ref{fig:architecture_and_loss} (left) shows where this modification acts inside the attention block. 
 This map is chosen to satisfy three design desiderata.
 First, it does not affect the attention weights who depend only on $Q$ and $K$.
 Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1$ as $r\to\infty$.
 Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ when $r\ll C$.
-Combined with the empirical observation that sink tokens often have small value norms, this makes V-scale a targeted modification rather than a uniform shrinkage.
+This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
 
-In practice we use a scale-matched parameterization
-\begin{equation}
-\label{eq:vscale_c}
-C_{\ell,h} = (d_{\mathrm{head}}\sigma)^2\lambda^{\ell,h},
-\end{equation}
-where $d_{\mathrm{head}}$ is the head dimension, $\sigma=0.02$ is the projection initialization scale used in our \texttt{LlamaForCausalLM} baseline, and $\lambda^{\ell,h}$ is either fixed to $1$ or learned as
-\[
-\lambda^{\ell,h}=\exp(\theta_{\ell,h}).
-\]
-The learnable version therefore introduces only one scalar parameter per layer and per head, which is negligible relative to the baseline parameter count. We implement this learnable version in this work.
+In practice we use a scaled reparameterization $C_{\ell,h} = (d_{\mathrm{head}}\sigma)^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the projection initialization scale used in our \texttt{LlamaForCausalLM} baseline and $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
+This learnable version therefore introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. We implement this learnable version in this work.
 
 \begin{figure*}[tb]
     \centering
@@ -496,10 +447,11 @@ The learnable version therefore introduces only one scalar parameter per layer a
     \caption{
     V-scale design and training behavior.
     Left: schematic of V-scale inside a pre-norm Transformer block.
+    Right: validation losses during training.
     }\label{fig:architecture_and_loss}
 \end{figure*}
 
-The key advantage of V-scale is that its backward behavior is exactly analyzable.
+As expected, the backward behavior of V-scale is analyzable.
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
 Then the Jacobian of the V-scale map $v\mapsto \hat v$ is
 \begin{equation}
@@ -514,48 +466,16 @@ Thus the map rescales gradients anisotropically: one gain along the radial direc
 
 \begin{proposition}[Exact gains of V-scale]\label{prop:vscale_main}
 Let $r=\|v\|_2^2$.
-Then the Jacobian in Eq.~\eqref{eq:vscale_jac} has eigenvalue
-\begin{equation}
-\label{eq:vscale_eigs_perp}
-\lambda_\perp(r)=\frac{r}{r+C}
-\end{equation}
-on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue
-\begin{equation}
-\label{eq:vscale_eigs_para}
-\lambda_\parallel(r)
-=
-\frac{r^2+3Cr}{(r+C)^2}
-\end{equation}
-along the radial direction $v$ itself.
-Moreover,
-\begin{equation}
-\label{eq:vscale_max_gain}
-\sup_{r\ge 0} \lambda_\parallel(r)=\frac{9}{8},
-\end{equation}
-attained at $r=3C$.
+Then the Jacobian in Eq.~\eqref{eq:vscale_jac} has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$ itself.
+Moreover, $\max_{r\ge 0} \lambda_\parallel(r)={9}/{8}$, attained at $r=3C$.
 \end{proposition}
 
 This proposition reveals that the worst local amplification of V-scale is uniformly bounded by $9/8$.
-On the other hand, in case $r$ is small, both gains are small.
-Indeed, when $r\ll C$,
-\[
-\lambda_\perp(r)\approx \frac{r}{C},
-\qquad
-\lambda_\parallel(r)\approx \frac{3r}{C},
-\]
-so the map strongly attenuates gradients that pass through small-norm values of sink tokens.
+Moreover, in case $r$ is small ($r\ll C$), we have $\lambda_\perp(r)\approx \frac{r}{C}$ and $\lambda_\parallel(r)\approx \frac{3r}{C}$, so the map strongly attenuates gradients that pass through small-norm values of sink tokens.
 
 \begin{corollary}[V-scale is a value-path gradient valve]\label{cor:vscale_main}
 Let $g_{\hat v}=\nabla_{\hat v}\mathcal{L}$ be the upstream gradient at the scaled value state.
-Then
-\begin{equation}
-\label{eq:vscale_grad_transform}
-\nabla_v \mathcal{L}
-=
-J_{\phi}(v)^\top g_{\hat v}
-=
-J_{\phi}(v) g_{\hat v},
-\end{equation}
+Then we have $\nabla_v \mathcal{L} = J_{\phi}(v)^\top g_{\hat v} = J_{\phi}(v) g_{\hat v}$,
 and therefore
 \begin{equation}
 \label{eq:vscale_grad_bound}
@@ -564,27 +484,24 @@ and therefore
 \lambda_\parallel(\|v\|_2^2)
 \,\|g_{\hat v}\|_2.
 \end{equation}
-In particular, if $\|v\|_2^2\ll C$, then
+In particular, if $\|v\|_2^2\ll C$, then the value-path backward signal is strongly attenuated as
 \begin{equation}
 \label{eq:vscale_small_regime}
 \|\nabla_v \mathcal{L}\|_2
 \lesssim
 \frac{3\|v\|_2^2}{C}
-\,\|g_{\hat v}\|_2,
+\,\|g_{\hat v}\|_2.
 \end{equation}
-so the value-path backward signal is strongly attenuated.
 \end{corollary}
 
-Corollary~\ref{cor:vscale_main} gives the precise reason we refer to V-scale as a \emph{gradient valve}.
-Since sink tokens are exactly the tokens on which value norms tend to be small, V-scale provides its strongest attenuation at the positions where gradient sink pressure is most severe.
-This is the decisive prediction of our mechanism: if MA is compensating for GS, then providing an alternative gradient valve should reduce the need for MA without necessarily weakening AS.
+Since sink tokens are exactly the tokens on which value norms tend to be small, Corollary~\ref{cor:vscale_main} means that V-scale provides its strongest attenuation at the positions where gradient sink pressure is most severe. This is the precise reason we refer to V-scale as a gradient valve.
 
 \subsection{Experiments}
 We train V-scale models with the same data, optimizer, and model configurations as the corresponding baselines.
-Figure~\ref{fig:architecture_and_loss} (right) shows that V-scale models reach validation losses comparable to the baselines in both model sizes. 
-Although we do not claim that achieving slightly lower training loss on such small scale models is of much practical significance, this result demonstrates that our modified models remain well trainable. 
+Figure~\ref{fig:architecture_and_loss} (right) shows that V-scale models reach validation losses comparable to the baselines. 
+Although achieving slightly lower training loss on such small-scale models may have limited practical significance, this result demonstrates that our modified models remain well trainable. 
 
-The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}. We compare baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
+The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}. We compare baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: Sink Mass $\overline M_s^\ell$ Eq.~\eqref{eq:sink_mass}, thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ Eq.~\eqref{eq:sink_rate}, residual-stream output norm, and MLP output norm.
 
 \begin{figure*}[tb]
     \centering
@@ -600,12 +517,13 @@ The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}.
     Forward phenomena in baseline and V-scale models.
     Top row: 0.1B model; bottom row: 0.3B model.
     From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
-    The solid curve shows token 0, and the dashed curve shows the mean over the rest early tokens; ``rest early tokens'' refers to positions 1--15.
+    The solid curve shows token 0 and the dashed curve shows the mean over the rest early tokens which refers to positions 1--15.
     }\label{fig:vscale_as_ma_compare}
 \end{figure*}
 
-The result is consistent across both model scales. On the AS metrics, V-scale preserves strong sink behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baseline. 
-This pattern is precisely what our mechanism predicts. V-scale does not directly modify the MLP that produces MA. Instead, it changes the value-path forward-backward flow. The most visible downstream effect is that the MLP output in the preceding layer becomes smaller. Thus the MA reduction is better explained as a training-time response to reduced gradient pressure than as a trivial consequence of shrinking the value vector itself.
+The results are consistent across both model scales. On the AS metrics, V-scale preserves strong sink behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baseline. 
+This pattern is precisely what our mechanism predicts. 
+The most visible downstream effect of V-scale is that the MLP output in the preceding layer becomes smaller. Thus the MA reduction is better explained as a training-time response to reduced gradient pressure than as a trivial consequence of shrinking the value vector itself.
 
 There is also an important limitation to keep in mind.
 The gradient arriving at the token representation after RMSNorm is not a pure value-path quantity but the sum of the $Q$, $K$, and $V$ paths:
@@ -621,16 +539,13 @@ W_V^\top G(v_s^\ell),
 \end{equation}
 up to the fixed RoPE rotations and the sum over heads.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-Our goal is more modest and relevant to the hypothesis of this paper. The point is not to show that once the dominant value-path pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA. That is exactly the behavior observed in Figure~\ref{fig:vscale_as_ma_compare}.
+Our goal is to show that once the dominant value-path pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA. That is exactly the behavior observed in Figure~\ref{fig:vscale_as_ma_compare}.
 
-Overall, V-scale closes the experimental loop of this paper:
-\[
-\mathrm{AS}\Longrightarrow\mathrm{GS}\Longrightarrow\mathrm{MA}.
-\]
-Attention sinks can remain strong and may even become slightly stronger in some layers while compensatory massive activations become less necessary once the value path provides extra gradient attenuation. This makes GS a more plausible mediator between AS and MA than a direct forward-pass account in which MA is itself the primary cause of AS.
-
-\section{Conclusion}
-In this work, we revisited the relationship between attention sinks and massive activations from the perspective of training dynamics. Our empirical and theoretical results suggest that the connection between the two is not purely a forward-pass co-occurrence, but is mediated by a backward mechanism: under causal attention, attention sinks induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized optimization stress in pre-norm Transformers. To test this hypothesis, we introduced V-scale, a value-path intervention that leaves the forward attention geometry largely intact while selectively modulating backpropagated gradients. Across models, we find that V-scale preserves attention sinks but substantially suppresses massive activations, providing direct evidence that these two phenomena can be separated once gradient sinks are controlled. Taken together, our findings support the causal picture \emph{attention sinks $\rightarrow$ gradient sinks $\rightarrow$ massive activations}, and highlight gradient regulation as a useful lens for understanding extreme-token phenomena in Transformer training. Future work may further investigate whether similar mechanisms arise in larger-scale models, alternative normalization schemes, and other gradient-sensitive architectural pathologies.
+\section{Conclusions}
+In this work, we revisited the relationship between attention sinks and massive activations from the perspective of backpropagation.
+Our empirical and theoretical results suggest that the connection between the two is not purely a forward-pass co-occurrence, but is mediated by a backward mechanism: under causal mask, attention sinks induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized pressure in pre-norm Transformers.
+To test this hypothesis, we introduced V-scale, a value-path intervention that selectively modulates backpropagated gradients. Across models, we find that V-scale preserves attention sinks but suppresses massive activations, providing direct evidence that these two phenomena can be separated once gradient sinks are controlled.
+Taken together, our findings support the causal picture \emph{attention sinks $\Rightarrow$ gradient sinks $\Rightarrow$ massive activations}, and highlight gradient regulation as a useful lens for understanding extreme-token phenomena in training Transformers.
 
 \bibliographystyle{plainnat}
 \bibliography{neurips_2025}
@@ -691,9 +606,9 @@ Throughout, we fix one layer and one attention head, and use the notations intro
 In particular,
 \[
 y_t = \sum_{j\le t} a_{tj} v_j,
-\qquad
+\quad
 o_t = W_O y_t,
-\qquad
+\quad
 g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}.
 \]
 
@@ -772,7 +687,7 @@ This proves Eq.~\eqref{eq:v_exact_main}.
 Write
 \[
 g_t = \mu + \varepsilon_t,
-\qquad
+\quad
 \mathbb{E}[\varepsilon_t]=0.
 \]
 By Theorem~\ref{thm:v_exact_main},
@@ -966,7 +881,7 @@ We use the standard RMSNorm map \citep{zhang2019rmsnorm}
 \mathrm{RMSNorm}(x)
 =
 \gamma \odot \frac{x}{\rms(x)},
-\qquad
+\quad
 \rms(x) := \sqrt{\frac{1}{d}\|x\|_2^2 + \epsilon}.
 \]
 For simplicity of presentation, we suppress $\epsilon$ in the symbolic derivation below; the same conclusion continues to hold with the usual stabilizer.
@@ -991,7 +906,7 @@ D\left(\frac{1}{r}I + x\frac{\partial (1/r)}{\partial x}\right).
 Using
 \[
 \frac{\partial r}{\partial x} = \frac{x^\top}{dr},
-\qquad
+\quad
 \frac{\partial (1/r)}{\partial x} = -\frac{x^\top}{dr^3},
 \]
 we obtain
@@ -1056,7 +971,7 @@ Hence the total gradient at the pre-attention residual state decomposes as
 G(h_t^{\ell})
 =
 G(h_t^{\ell+\frac12}) + \Delta_t^{\mathrm{attn}},
-\qquad
+\quad
 \Delta_t^{\mathrm{attn}} := G(h_t^{\ell}) - G(h_t^{\ell+\frac12}).
 \]
 By the definitions in Section~\ref{subsec:prelim_backward_obs},
