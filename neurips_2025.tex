@@ -352,15 +352,7 @@ It follows from a basic property of RMSNorm.
 
 \begin{theorem}[Activation-dependent compression under RMSNorm]\label{thm:rms_compress_main}
 Denote $y=\mathrm{RMSNorm}(x) = \gamma \odot \frac{x}{\rms(x)}$ with $\rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon}$, and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
-Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian satisfies $\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{2\|\gamma\|_\infty}{\rms(x)}$.
-Consequently, we have
-\[
-\|\nabla_x\mathcal{L}\|_2
-\le
-\frac{2\|\gamma\|_\infty}{\rms(x)}
-\,
-\|g_y\|_2.
-\]
+Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian satisfies $\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{\rms(x)}$.
 \end{theorem}
 
 The proof is deferred to Appendix~\ref{app:theory}.
@@ -865,47 +857,32 @@ Since $y = D(x/r)$, we have
 Now $\frac{\partial}{\partial x}\left(\frac{1}{r}\right) = -\frac{1}{r^2}\frac{\partial r}{\partial x} = -\frac{1}{r^3 d}x^\top$ gives the stated formula.
 \end{proof}
 
-\begin{corollary}[RMSNorm compresses gradients as $\|x\|$ grows]\label{cor:rms-compress-app}
-Let $\nabla_y L$ be the upstream gradient at the RMSNorm output. Then the operator norm is bounded by 
+\begin{proof}[Proof of Theorem~\ref{thm:rms_compress_main}]
+The chain rule gives $\nabla_x L = J_{\mathrm{rms}}(x)^\top\nabla_y L$. Proposition~\ref{prop:rms-jac-app} implies
 \[
-    \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{r}\left(1 + \frac{\|x\|_2^2}{dr^2}\right) \le \frac{2\|\gamma\|_\infty}{r},
+    J_{\mathrm{rms}}(x) = \frac{1}{r}D \left(I - \frac{x x^\top}{\|x\|_2^2}\right).
 \]
-and therefore we have
-\[
-    \|\nabla_x L\|_2 \le \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}\,\|\nabla_y L\|_2 \lesssim \frac{1}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
-\]
-\end{corollary}
-
-\begin{proof}
-The chain rule gives $\nabla_x L = J_{\mathrm{rms}}(x)^\top\nabla_y L$. For the operator norm, Proposition~\ref{prop:rms-jac-app} implies
+The orthogonal projection matrix $I - \frac{x x^\top}{\|x\|_2^2}$ has eigenvalues $0$ and $1$. Thus we have
 \[
     \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}}
-    \le \frac{1}{r}\|D\|_{\mathrm{op}} + \frac{1}{r^3 d}\|Dxx^\top\|_{\mathrm{op}}.
+    \le \frac{1}{r}\|D\|_{\mathrm{op}} = \frac{\|\gamma\|_\infty}{r}.
 \]
-Since $\|D\|_{\mathrm{op}} = \|\gamma\|_\infty$ and $\|Dxx^\top\|_{\mathrm{op}} = \|Dx\|_2\|x\|_2 \le \|D\|_{\mathrm{op}}\|x\|_2^2$, we obtain
-\[
-    \|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{r}\left(1 + \frac{\|x\|_2^2}{dr^2}\right).
-\]
-Finally, $r^2 = \|x\|_2^2/d$ gives the bound by $2\|\gamma\|_\infty/r$.
 \end{proof}
 
 \begin{proposition}[Activation norm as a sufficient condition for bounded backpropagated gradients]\label{prop:required-rms-app}
 Fix a target gradient scale $\tau > 0$. A sufficient condition for $\|\nabla_x L\|_2 \le \tau$ is
 \[
-    \mathrm{rms}(x) \ge \frac{2\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
+    \mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
 \]
 Thus, for fixed $\tau$ and gain $\gamma$, a larger upstream gradient requires a larger input RMS to keep the backward signal bounded.
 \end{proposition}
 
 \begin{proof}
-By Corollary~\ref{cor:rms-compress-app}, we have
+By Theorem~\ref{thm:rms_compress_main}, we have
 \[
-    \|\nabla_x L\|_2 \le \frac{2\|\gamma\|_\infty}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
+    \|\nabla_x L\|_2 \le \frac{\|\gamma\|_\infty}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
 \]
-To make the right-hand side at most $\tau$, it suffices that
-\[
-    \mathrm{rms}(x) \ge \frac{2\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
-\]
+To make the right-hand side at most $\tau$, it suffices that $\mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2$.
 \end{proof}
 
 Proposition~\ref{prop:required-rms-app} means that in a pre-norm Transformer, if a token receives unusually large gradient pressure, increasing its token-wise activation norm provides a direct channel for reducing the gradient magnitude passed to earlier layers. This is the mathematical sense in which massive activations can act as a gradient-compression response.
