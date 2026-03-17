@@ -403,13 +403,7 @@ Moreover, we have:
 \begin{corollary}[V-scale is a value-path gradient valve]\label{cor:vscale_main}
 Let $g_{\hat v}=\nabla_{\hat v}\mathcal{L}$ be the upstream gradient at the scaled value state.
 Then we have $\nabla_v \mathcal{L} = J_{\phi}(v)^\top g_{\hat v} = J_{\phi}(v) g_{\hat v}$,
-and therefore
-\[
-\|\nabla_v \mathcal{L}\|_2
-\le
-\lambda_\parallel(\|v\|_2^2)
-\,\|g_{\hat v}\|_2.
-\]
+and therefore $\|\nabla_v \mathcal{L}\|_2 \le \lambda_\parallel(\|v\|_2^2)\|g_{\hat v}\|_2$.
 In particular, if $\|v\|_2^2\ll C$, then the value-path backward signal is strongly attenuated as
 \[
 \|\nabla_v \mathcal{L}\|_2
