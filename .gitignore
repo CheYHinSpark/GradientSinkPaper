@@ -1,4 +1,5 @@
 *.py
+/comments
 *.aux
 *.bbl
 *.blg
