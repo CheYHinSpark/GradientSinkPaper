@@ -13,6 +13,13 @@
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
 
+\usepackage{enumitem}
+\usepackage{float}
+
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline  \\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 
 \usepackage{amssymb,amsthm,mathtools,bm}
 \usepackage{wrapfig}
@@ -425,7 +432,115 @@ These limitations are left for future work.
 \clearpage
 \appendix
 
-\end{document}
+%\end{document}
+
+\section{Quanming}
+
+
+
+\subsection{Difference}
+
+\begin{table}[ht]
+	\centering
+	\small
+	\setlength\tabcolsep{1pt}
+	\begin{tabular}{C{1.5cm} C{5cm} C{2.5cm} C{4.5cm}}
+		\toprule
+		\textbf{Work} & \textbf{Main idea} & \textbf{Overlap with ours} & \textbf{Key difference / our contribution} \\ 
+		\midrule
+		
+		Bondarenko et al. (2023) 
+		& Activation outliers arise from heads implementing ``no-op'' behavior under softmax; propose clipped softmax and gating 
+		& Optimization-based explanation of extreme activations 
+		& Does not identify token-level gradient concentration or an explicit mediator linking AS and MA \\ \midrule
+		
+		Sun et al. (2024) 
+		& Massive activations are widespread and act as bias terms affecting attention 
+		& Links MA with attention behavior 
+		& Primarily forward/functional view; no backward-pass mediator \\ \midrule
+		
+		Gu et al. (2025) 
+		& Empirical study of when attention sinks emerge 
+		& Strong characterization of AS 
+		& No mechanism connecting AS to MA \\ \midrule
+		
+		Guo et al. (2025) 
+		& Training-time mutual reinforcement explains extreme-token phenomena 
+		& Closest prior mechanistic work 
+		& No explicit formulation of gradient sinks or RMSNorm-based response \\ \midrule
+		
+		Barbero et al. (2025) 
+		& First-token attention avoids over-mixing 
+		& Functional explanation of AS 
+		& Does not address MA or gradient dynamics \\ \midrule
+		
+		Queipo-de-Llano et al. (2026) 
+		& Connects attention sinks and compression valleys via massive activations 
+		& Links AS and MA 
+		& Treats MA as primary driver; we instead identify GS as mediator \\ \midrule
+		
+		Sun et al. (2026) 
+		& AS/MA co-occurrence is a pre-norm architectural artifact 
+		& Alternative explanation of coupling 
+		& Focuses on architecture; we focus on training dynamics \\ \midrule
+		
+		Softpick (2025) 
+		& Modifies softmax to remove AS and MA 
+		& Intervention on same phenomena 
+		& Alters forward geometry; not a targeted causal test \\ \midrule
+		
+		Gated Attention (2025) 
+		& Uses output gating to mitigate extreme-token behavior 
+		& Large-scale mitigation 
+		& Not designed to isolate causal mechanism \\ \midrule
+		
+		VGA (2025) 
+		& Value-state gating based on gradient analysis 
+		& Closest intervention method 
+		& Does not isolate a minimal mechanism preserving AS while suppressing MA \\ \midrule
+		
+		\textbf{Ours} 
+		& AS induces GS; MA arises as RMSNorm-mediated response; V-scale intervention 
+		& --- 
+		& Identifies GS as explicit mediator and provides sink-preserving causal validation \\ 
+		
+		\bottomrule
+	\end{tabular}
+	\caption{Comparison with existing works on attention sinks, massive activations, and mitigation methods.}
+	\label{tab:related}
+\end{table}
+
+\subsection{Contributions}
+
+\begin{itemize}[leftmargin=*]
+	\item 
+	We identify gradient sinks as an explicit backward-pass mediator of extreme-token behavior in causal, pre-norm Transformers.
+	
+	\item
+	We reinterpret massive activations, within RMSNorm pre-norm models, as a local gradient-compression response to sink-induced pressure.
+	
+	\item
+	We propose V-scale, a lightweight value-path intervention that largely preserves attention sinks while reducing massive activations, providing a targeted causal test of the GS hypothesis.
+\end{itemize}
+
+\subsection{Organization}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1.0\linewidth]{pics/org}
+\end{figure}
+
+\subsection{Introduction}
+
+Transformer-based language models exhibit a striking and persistent behavior: a small number of tokens—most notably the first token—attract disproportionate attention from the rest of the sequence, while simultaneously developing unusually large activation magnitudes. These extreme-token phenomena, commonly referred to as attention sinks and massive activations, have been widely observed across model scales and architectures, and have significant implications for long-context modeling, numerical stability, and efficient deployment.
+
+Despite their prevalence, the origin of these phenomena remains poorly understood. Existing explanations largely focus on the forward computation, interpreting attention sinks as functional structures such as context anchors or no-op attention heads, and massive activations as representational artifacts or bias-like terms. However, these perspectives leave a fundamental question unanswered: \textbf{why does optimization consistently produce such coupled and extreme behaviors?} This question is particularly puzzling in modern pre-norm Transformers, where both attention and feed-forward layers operate on normalized representations. In such architectures, forward computation depends primarily on representation direction rather than magnitude, suggesting that large activation norms should play a limited role. Yet in practice, massive activations not only emerge but tightly co-occur with attention sinks throughout training. This apparent mismatch indicates that forward-pass explanations alone are insufficient.
+
+In this work, we revisit this problem from the perspective of training dynamics and uncover a previously overlooked mechanism. We show that attention sinks not only dominate the forward pass, but also induce concentrated gradient flow during backpropagation, forming what we term gradient sinks. Under causal masking, gradients from many tokens aggregate onto the sink token, creating localized gradient pressure that is highly asymmetric across token positions. We further demonstrate that, in pre-norm architectures, massive activations arise as an adaptive response to this imbalance: through normalization, larger activation norms attenuate backpropagated gradients, effectively reshaping the gradient flow to maintain stable optimization. This establishes a causal chain from forward attention structure to backward gradient concentration and activation growth.
+
+To validate this mechanism, we introduce V-scale, a lightweight modification that selectively regulates value-path gradients without altering attention weights. Empirically, V-scale preserves attention sinks while significantly suppressing massive activations, providing direct evidence that gradient sinks act as the mediator between the two phenomena. Taken together, our findings suggest that extreme-token behaviors in Transformers are not merely forward artifacts, but are governed by the structure of gradient flow during training, offering a new lens for understanding and controlling optimization in large language models.
+
+\clearpage
 
 \section{Model and training configuration}\label{app:config}
 
