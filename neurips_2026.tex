@@ -135,7 +135,7 @@ where $H$ is the number of attention heads in each layer. Following prior work \
 \! = \! \frac{S_s^{\ell,h}}{T-s+1}
 \! = \! \frac{1}{T-s+1}\sum\nolimits_{t=s}^{T} (a_{ts}^{\ell,h})^2.
 \end{equation}
-The quantity $\overline M_s$ is the average attention mass routed through token $s$ by all causally allowed future queries and $\overline S_s$ is a second-moment version. In experiments, we focus on the first token ($s=1$) and further summarize Eq.~\eqref{eq:sink_mass} across heads and layers.
+The quantity $\overline M_s$ is the average attention mass routed through token $s$ by all causally allowed future queries and $\overline S_s$ is a second-moment version. In experiments, we focus on the first token ($s=1$) and further summarize \eqref{eq:sink_mass} across heads and layers.
 
 For activations, many prior studies identify MA as \emph{single} activation magnitudes that are large where both token and feature axes are considered \cite{bondarenko2023quantizable,sun2024massive}. 
 In this work, we concern \emph{token-wise} behaviors, so we identify MA as large token-wise activation norms at an explicitly chosen computational site \cite{guo2025activedormant}, including the input of Transformer layers $\|h_{t,\mathrm{in}}^\ell\|=\|h_t^\ell\|_2$, the output of Transformer layers $\|h_{t,\mathrm{out}}^\ell\|=\|h_t^{\ell+1}\|_2$, and the hidden states after Attention $\|h_{t,\mathrm{half}}^\ell\|=\|h_t^{\ell+{1}/{2}}\|_2$.
@@ -160,10 +160,9 @@ Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{C
 
 
 With these definitions in place, we are ready to examine the training dynamics induced by attention structure. 
-In Section~\ref{sec:as_to_gs}, 
-we show that attention sinks lead to concentrated gradients, forming gradient sinks.
+Section~\ref{sec:as_to_gs} shows that attention sinks lead to concentrated gradients, forming gradient sinks.
 In Section~\ref{sec:pressure_reshape}, 
-we analyze how such localized gradient pressure is reshaped by the network and gives rise to massive activations. 
+we analyze how such localized gradient pressure is reshaped by the network and associated with massive activations. 
 Finally, Section~\ref{sec:vscale}
 validates this mechanism through targeted intervention on the gradient flow.
 
@@ -198,7 +197,7 @@ Unless otherwise stated, these statistics are averaged over the full evaluation 
     Top row: 0.1B model; bottom row: 0.3B model.
     From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
     We compare the first token (token 0) with the mean and maximum over the rest early tokens (positions 1--15).
-    The results comfirm the co-occurrence of AS and MA.
+    The results confirm the co-occurrence of AS and MA.
     }\label{fig:baseline_forward_main}
 \end{figure}
 
@@ -226,7 +225,7 @@ The statistics are averaged over layers.
     \caption{
     Token-wise gradient norms of QKV across training checkpoints.
     Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: gradient norms of query, key, and value as functions of token position mean over layers.
+    From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers.
     In both scales, key and especially value gradients exhibit a pronounced spike at token 0.
     }\label{fig:qkv_grads_over_tokens}
 \end{figure}
@@ -357,7 +356,7 @@ Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ whe
 This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
 
-\begin{wrapfigure}[12]{r}{0.36\linewidth}
+\begin{wrapfigure}[11]{r}{0.36\linewidth}
 	\centering
 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}
 	
@@ -404,7 +403,7 @@ The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}.
     % From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
     From left to right: thresholded sink rate, residual-stream output norm, MLP output norm, and Attention output norm.
     We compare the first token with the mean over the rest early tokens (positions 1--15).
-    Across both scales, V-scale largely preserves sink behavior while reducing the activation norms of token 0, which is primarily attributable to attenuated MLP outputs.
+    Across both scales, V-scale largely preserves sink behavior while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs.
     }\label{fig:vscale_as_ma_compare}
 \end{figure}
 
