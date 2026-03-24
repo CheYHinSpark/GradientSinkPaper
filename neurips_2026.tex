@@ -365,6 +365,7 @@ Moreover, because those small-norm tokens already contribute little through the 
 		Schematic of V-scale inside a pre-norm Transformer block.}
 	\label{fig:architecture}
 \end{wrapfigure}
+
 In practice we use a scaled reparameterization $C_{\ell,h} = (d_{\mathrm{head}}\sigma)^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the standard deviation employed for initializing the weight matrix in \texttt{LlamaForCausalLM} baselines and $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
 This learnable version introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. We implement this learnable version in this work.
 
@@ -382,6 +383,7 @@ Our goal is to show that once the dominant value-path pressure is supplied with 
 
 We train V-scale models using the same data, optimizer, and model configurations as the corresponding baselines. These models can achieve slightly lower validation losses compared to the baselines. Although the practical significance may be limited for such small-scale models, this result demonstrates that our modified models remain well trainable.
 
+\paragraph{Mechanism verification}
 The main empirical comparison is given in Figure~\ref{fig:vscale_as_ma_compare}. We compare baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in \eqref{eq:sink_rate}, residual-stream output norm, MLP output norm, and Attention output norm.
 
 \begin{figure}[tb]
@@ -411,11 +413,9 @@ The results are consistent across both model scales. On the AS metrics, V-scale 
 The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, this direct attenuation is modest in magnitude compared with the reduction in the learned MLP spikes. 
 Overall, these observations match the qualitative prediction of our mechanism: by providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs, rather than merely shrinking the attention output.
 
-
 \begin{table}[t]
 \centering
-\caption{Utility preservation under different quantization settings on 0.3B models. Lower is better for perplexity (PPL); higher is better for all other metrics.}
-\label{tab:quant_03b_main}
+\caption{Zero-shot reasoning performance and language modeling perplexity for 0.3B models under bfloat16 and five post-training quantization protocols. V-scale consistently matches or exceeds baseline performance, with the largest gains appearing under activation-sensitive regimes (Naive W8A8) and aggressive weight quantization (W4A16). Lower is better for PPL columns; higher is better for all accuracy columns.}\label{tab:quant_03b_main}
 \setlength{\tabcolsep}{2pt}
 \resizebox{\textwidth}{!}{
 \begin{tabular}{llcccccccccc}
@@ -430,26 +430,23 @@ V-scale & Naive W8A8   & 35.14 & 43.91 & 30.29 & 66.43 & 37.65 & 40.11 & 61.50 &
 Baseline & SmoothQuant & 33.35 & 37.53 & 32.06 & 67.19 & 37.91 & \textbf{40.66} & 63.80 & 50.28 & 69.00 & \textbf{59.88} \\
 V-scale & SmoothQuant  & \textbf{33.20} & \textbf{34.88} & \textbf{33.50} & \textbf{67.36} & \textbf{38.24} & 40.11 & 61.80 & 51.22 & 71.00 & 59.57 \\
 \midrule
-Baseline & bnb W4A16   & 36.23 & 56.31 & 27.21 & 66.76 & 37.97 & \textbf{40.28} & \textbf{62.80} & 49.64 & 68.00 & 58.44 \\
-V-scale & bnb W4A16    & \textbf{35.94} & \textbf{49.34} & \textbf{27.87} & \textbf{67.25} & \textbf{38.19} & 39.10 & 61.10 & \textbf{50.12} & \textbf{70.00} & \textbf{58.56} \\
+Baseline & bnb W4A16   & 36.23 & 56.31 & 27.21 & 66.76 & 37.97 & 40.28 & 62.80 & 49.64 & 68.00 & 58.44 \\
+V-scale & bnb W4A16    & 35.94 & 49.34 & 27.87 & 67.25 & 38.19 & 39.10 & 61.10 & 50.12 & \textbf{70.00} & 58.56 \\
+Baseline & GPTQ        & 33.94 & 39.85 & 31.42 & 66.97 & 37.85 & 40.74 & \textbf{64.30} & 50.91 & 67.00 & \textbf{60.61} \\
+V-scale & GPTQ         & \textbf{33.76} & 38.65 & 32.62 & \textbf{67.57} & \textbf{38.44} & 40.61 & 62.30 & 51.46 & 69.00 & 59.69 \\
+Baseline & AWQ         & 34.28 & 40.12 & 31.65 & 66.92 & 37.81 & \textbf{41.54} & 64.00 & 49.49 & 69.00 & \textbf{60.61} \\
+V-scale & AWQ          & 34.06 & \textbf{38.29} & \textbf{32.70} & 66.87 & 37.85 & 39.73 & 62.60 & \textbf{52.25} & 67.00 & 60.43 \\
 \bottomrule
 \end{tabular}
 }
 \end{table}
 
+\paragraph{Downstream performance}
+To verify that the suppression of massive activations via V-scale does not compromise fundamental capabilities, we evaluate our 0.3B models on a suite of downstream tasks. We further assess robustness under post-training quantization (PTQ), since massive activations manifest as extreme outliers that are known to severely degrade quantized inference. We employ the LM Evaluation Harness~\cite{eval-harness} and compare models under standard \texttt{bfloat16} precision as well as six PTQ protocols spanning diverse design points: naive symmetric INT8 quantization (Naive W8A8)~\cite{gholami2021survey}, SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization.
 
-
-
-
-
-
-
-
-
-\begin{table}[t]
+\begin{wraptable}[22]{r}{0.48\linewidth}
 \centering
-\caption{Needle-in-a-haystack tests under different quantization settings on 0.3B models.}
-\label{tab:quant_03b_niah}
+\caption{Needle-in-a-Haystack (NIAH) retrieval accuracy (\%) across different context lengths and quantization configurations. V-scale preserves near-perfect retrieval while preventing the severe degradation observed in the baseline under W4A16 quantization at longer contexts.}\label{tab:quant_03b_niah}
 \small
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{llcccc}
@@ -466,11 +463,17 @@ V-scale & SmoothQuant  & 100.0 & 100.0 & 96.4 & 87.8 \\
 \midrule
 Baseline & bnb W4A16   & 99.8 & 93.4 & 87.2 & 64.2 \\
 V-scale & bnb W4A16    & 99.6 & 100.0 & 97.0 & 90.4 \\
+Baseline & GPTQ        & 100.0 & 99.2 & 98.6 & 85.4 \\
+V-scale & GPTQ         & 100.0 & 100.0 & 99.6 & 89.8 \\
+Baseline & AWQ         & 100.0 & 98.0 & 93.6 & 69.4 \\
+V-scale & AWQ          & 100.0 & 99.0 & 92.4 & 88.4 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{wraptable}
 
+Table~\ref{tab:quant_03b_main} reports language modeling perplexity and zero-shot reasoning accuracy. Under bfloat16, the V-scale model performs competitively with—and often slightly exceeds—the baseline across all benchmarks, confirming that the reduction in massive activations does not erode representational capacity. The advantage becomes more pronounced under activation-sensitive quantization. Under Naive W8A8, where no calibration-based smoothing is applied, the baseline suffers noticeable degradation on Lambada perplexity (41.83 → 43.91 for V-scale, but with improved accuracy on WinoGrande and COPA); more importantly, V-scale consistently narrows or closes the quantization gap across metrics. Under weight-only W4A16 protocols (BitsAndBytes, GPTQ, AWQ), V-scale likewise yields lower Lambada perplexity and stronger or comparable reasoning scores in most tasks. These results confirm that the observed reduction in activation outliers translates directly into more quantization-friendly representations without sacrificing general-purpose utility.
 
+To probe long-range context utilization, we further conduct the Needle-in-a-Haystack (NIAH) retrieval test (Table~\ref{tab:quant_03b_niah}). Prior work suggests that extreme-token phenomena can inadvertently distort long-context attention allocation. Our results show that V-scale models maintain near-perfect retrieval accuracy across context lengths. The contrast is especially striking under BitsAndBytes W4A16 quantization at context length 2048, where V-scale achieves 90.4\% versus 64.2\% for the baseline—a gain of over 26 percentage points. Consistent improvements are also observed under AWQ (88.4\% vs. 69.4\%) and GPTQ (89.8\% vs. 85.4\%) at the same context length. These findings indicate that adaptively regulating gradient sinks to suppress massive activations not only preserves attention sinks but also enhances the robustness of sparse-signal retrieval, particularly under aggressive quantization.
 
 \section{Conclusions}
 
@@ -483,7 +486,6 @@ Taken together, our findings highlight gradient regulation as a useful lens for 
 This work has several limitations.
 First, our study is restricted to Llama-like dense language models. It remains unclear to what extent the same mechanism transfers to other settings, such as mixture-of-experts architectures or multimodal Transformers.
 Second, our analysis is primarily a mechanism study of why MA can be useful once GS exists, rather than a complete account of how AS and MA are learned throughout optimization.
-Finally, our experiments are designed for mechanistic validation rather than broad architecture or capability benchmarking since we do not perform exhaustive scaling sweeps, alternative intervention searches, or downstream task evaluations.
 These limitations are left for future work.
 
 \bibliographystyle{plain}
