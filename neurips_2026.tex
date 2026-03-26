@@ -179,6 +179,7 @@ We save checkpoints every 1000 steps during training.
 At each checkpoint, we run one forward-backward pass using the same causal language modeling objective as in training and collect token-wise statistics.
 Unless otherwise stated, these statistics are averaged over the full evaluation batches, and the AS metrics are additionally averaged over heads.
 
+
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.23\textwidth]{pics/01B_baseline/AS_mass_compare.pdf}
@@ -205,6 +206,18 @@ In both model sizes, the sink token separates sharply from the other early token
 in \eqref{eq:sink_mass} and $\mathrm{Sink}_s^{\epsilon,\ell}$ in \eqref{eq:sink_rate}. 
 On the other hand, the residual outputs are broadly elevated on the first token, and the strongest amplification is concentrated in a small number of MLP blocks. 
 These results confirm that AS and MA already co-occur clearly in small pre-norm Transformers.
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/Qwen2__5_7B/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
+    \caption{
+    }%\label{}
+\end{figure}
 
 We now turn to the backward pass and collect the gradients of $q_t$, $k_t$, and $v_t$ in attention blocks for every token position $t$.
 For each pathway, we first aggregate gradients over the full batch exactly as in one optimization step, and then take the $l_2$ norm for each token.
