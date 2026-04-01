@@ -152,8 +152,8 @@ R_{GS}^{\ell}(s) :=
 \frac{\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2}{\frac{1}{T_e} \sum_{t\le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2}.
 \end{equation}
 A model exhibits a gradient sink at position $s$ if $R_{GS}^{\ell}(s)\gg 1$ across a substantial fraction of layers. % 我们为什么不定义一个固定的阈值？因为具体的数值可能与多种因素相关，但是>>1足以体现token间的不均衡性，刻画了最基本的Gradient Sink现象。
-
- Furthermore, recalling that $h_t^{\ell+{1}/{2}} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ for Attention blocks, we have $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path.
+Next, 
+recalling that $h_t^{\ell+{1}/{2}} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ for Attention blocks, we have $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path.
 We then define three ratios by
 \begin{equation}\label{eq:ratios_attn}
 \begin{aligned}
@@ -168,7 +168,8 @@ We then define three ratios by
 Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ in the same way for MLP branch.
 % The terminology is chosen to match the observation we later show in Section~\ref{sec:pressure_reshape}.
 
-With these definitions in place, we are ready to examine the training dynamics induced by attention structure. 
+With above definitions, 
+we are ready to examine the training dynamics induced by attention structure. 
 Section~\ref{sec:as_to_gs} shows that attention sinks lead to concentrated gradients, forming gradient sinks.
 In Section~\ref{sec:pressure_reshape}, 
 we analyze how such localized gradient pressure is reshaped by the network and associated with massive activations. 
@@ -261,7 +262,8 @@ Moreover, the value-path spikes are observed to be substantially larger than the
 The query pathway looks qualitatively different and its token-wise gradient profile is comparatively flat across most positions.
 In fact, the query gradient at the first token is exactly zero under causal masking.
 
-Taken together, these observations establish the central empirical fact of this section:
+Thus, 
+these observations establish the central empirical fact of this section:
 in pretrained Transformer models, the sink token is not only a forward attention sink but also a backward gradient sink.
 
 \subsection{Theoretical results}\label{subsec:theory_as_to_gs}
