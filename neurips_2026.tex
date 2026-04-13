@@ -294,6 +294,8 @@ These match our measurements that the sink token shows strong value/key gradient
 \section{Gradient reshaping by massive activations}
 \label{sec:pressure_reshape}
 
+Section~\ref{sec:as_to_gs} established that attention sinks induce a pronounced gradient sink on the first token. The next question is why this matters for optimization. The key issue is that such concentration creates a persistent local optimization burden that must be reshaped before it can be propagated through a deep residual network. If the sink token repeatedly receives much larger branch-local gradients than other tokens, one would expect either disproportionately strong local updates or a distortion of gradient transport along the residual stream. From this perspective, GS is a pressure that the network must absorb while keeping training in a stable regime. 
+
 This section examines how the localized gradient pressure is reshaped and whether the observed MA pattern aligns with a concrete gradient-compression mechanism in pre-norm architectures.
 For each layer of a checkpoint, we compare the activation norms of the attention branch input $\|h_{\mathrm{in}}^\ell\|$, against three ratios defined in \eqref{eq:ratios_attn}: $\mathrm{Bloat}^{\mathrm{attn},\ell}$, $\mathrm{Compress}^{\mathrm{attn},\ell}$, and $\mathrm{Change}^{\mathrm{attn},\ell}$.
 The same measurements for the MLP branch are deferred to Appendix~\ref{app:mlp_reshaping}.
@@ -348,7 +350,7 @@ These results support the mechanism whereby massive activations attenuate locali
 \section{V-scale: a value-path gradient valve}
 \label{sec:vscale}
 
-The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily a response to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved.
+The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. More practically, such an intervention would help improve robustness under quantization, as MA is empirically associated with inference fragility. % TODO: maybe reference
 This section implements this prediction.
 
 Several recent architectural variants mitigate extreme phenomena like MA and AS by changing the Softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
@@ -372,13 +374,9 @@ For each attention head, after the standard value projection and before value ag
 \]
 where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as illustrated in Figure~\ref{fig:architecture}.
 
-\begin{wrapfigure}[11]{r}{0.36\linewidth}
+\begin{wrapfigure}[12]{r}{0.36\linewidth}
 	\centering
-    \vspace{-12pt}
-	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}
-    \vspace{-20pt}
-	\caption{
-		Schematic of V-scale inside a pre-norm Transformer block.}
+	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
 	\label{fig:architecture}
 \end{wrapfigure}
 
@@ -480,20 +478,9 @@ V-scale & AWQ          & 34.06 & \textbf{38.29} & \textbf{32.70} & 66.87 & 37.85
 \paragraph{Downstream performance}
 To verify that the suppression of massive activations via V-scale does not compromise fundamental capabilities, we evaluate our 0.3B models on a suite of downstream tasks. We further assess robustness under post-training quantization (PTQ), since massive activations manifest as extreme outliers that are known to severely degrade quantized inference. We employ the LM Evaluation Harness~\cite{eval-harness} and compare models under standard \texttt{bfloat16} precision as well as five PTQ protocols spanning diverse design points: naive symmetric INT8 quantization (Naive W8A8)~\cite{gholami2021survey}, SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization.
 
-Table~\ref{tab:quant_03b_main} reports language modeling perplexity and zero-shot reasoning accuracy. Under bfloat16 and all quantization settings, the V‑scale model performs on par with or even surpasses the baseline, confirming that substantially reducing activations does not compromise its representational capacity. 
-
-To further investigate the impact on long-range attention allocation, we conduct the Needle-in-a-Haystack (NIAH) retrieval test across context lengths from 512 to
-2048 tokens. Table~\ref{tab:quant_03b_niah} reports retrieval accuracy under bfloat16 and the same five PTQ protocols used above.
-Under full-precision bfloat16, V-scale slightly outperforms the baseline at the longest context (87.9\% vs. 82.5\%), indicating that
-suppressing massive activations does not impair the ability to route attention over long ranges.
-The advantage becomes substantially more pronounced under quantization. With the exception of naive W8A8, V-scale consistently outperforms the baseline across all other PTQ settings at context length 2048, with absolute gains ranging from +3.0\% (GPTQ) to +25.9\% (BitsAndBytes W4A16). 
-These results are consistent with the hypothesis that massive activations disproportionately harm quantized representations, particularly for longer contexts.
-
-\begin{wraptable}[18]{r}{0.48\linewidth}
+\begin{wraptable}[22]{r}{0.5\linewidth}
 \centering
-\vspace{-15pt}
-\caption{Needle-in-a-Haystack (NIAH) retrieval accuracy (\%) across different context lengths and quantization configurations. V-scale preserves retrieval performance well while preventing the severe degradation under quantization at longer contexts.}\label{tab:quant_03b_niah}
-\small
+\caption{Needle-in-a-Haystack (NIAH) retrieval accuracy (\%) across different context lengths and quantization settings. V-scale preserves retrieval performance well while preventing the severe degradation under quantization at longer contexts.}\label{tab:quant_03b_niah}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{llcccc}
 \toprule
@@ -517,17 +504,29 @@ V-scale & AWQ          & 100.0 & 99.5 & 91.8 & 89.1 \\
 \end{tabular}
 \end{wraptable}
 
+Table~\ref{tab:quant_03b_main} reports language modeling perplexity and zero-shot reasoning accuracy. Under bfloat16 and all quantization settings, the V‑scale model performs on par with or even surpasses the baseline, confirming that substantially reducing activations does not compromise its representational capacity. 
+
+To further investigate the impact on long-range attention allocation, we conduct the Needle-in-a-Haystack (NIAH) retrieval test across context lengths from 512 to
+2048 tokens. Table~\ref{tab:quant_03b_niah} reports retrieval accuracy under bfloat16 and the same five PTQ protocols used above.
+Under full-precision bfloat16, V-scale slightly outperforms the baseline at the longest context (87.9\% vs. 82.5\%), indicating that
+suppressing massive activations does not impair the ability to route attention over long ranges.
+The advantage becomes substantially more pronounced under quantization. With the exception of naive W8A8, V-scale consistently outperforms the baseline across all other PTQ settings at context length 2048, with absolute gains ranging from +3.0\% (GPTQ) to +25.9\% (BitsAndBytes W4A16). 
+These results are consistent with the hypothesis that massive activations disproportionately harm quantized representations, particularly for longer contexts.
+
 Taken together, these results demonstrate that the reduction in massive activations achieved by V-scale translates into concrete downstream robustness. The quantization-friendly activation profile preserves long-range retrieval fidelity, providing practical evidence that controlling gradient sinks yields more deployment-ready models.
 
 \section{Conclusions}
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
 Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, attention sinks can induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized pressure in pre-norm Transformers.
-To test this hypothesis, we introduce V-scale, a value-path intervention that selectively modulates backpropagated gradients. Across models, we find that V-scale preserves attention sinks but suppresses massive activations, illustrating that these two phenomena can be separated once gradient sinks are controlled.
-Taken together, our findings highlight gradient regulation as a useful lens for understanding extreme token phenomena in the optimization dynamics of Transformers.
+To test this hypothesis, we introduce V-scale, a value-path intervention that selectively modulates backpropagated gradients.
+Across models, we find that V-scale preserves attention sinks but suppresses massive activations, illustrating that these two phenomena can be separated once gradient sinks are controlled.
+Across model sizes, V-scale preserves attention sinks but suppresses massive activations, showing that AS and MA can be separated once GS is controlled. Robustness under quantization is also improved.
+
+Taken together, our findings suggest that some phenomena in large language models may not be best understood purely as forward functional structures but a reflection to how optimization adapts to architectural constraints in order to maintain stable gradient transport. We believe this gradient-regulation perspective may be useful for future designs of normalization, attention mechanisms, and training-time interventions that aim to preserve the benefits of sink structure while reducing its costs.
 
 \paragraph{Limitations}
-This work has several limitations.
+This work has some limitations.
 First, our study is restricted to Llama-like dense language models. It remains unclear whether and to what extent the same mechanism transfers to other settings, such as mixture-of-experts architectures or multimodal Transformers.
 Second, our analysis is primarily a mechanism study of why MA can be useful once GS exists, rather than a complete account of how AS and MA are learned throughout optimization.
 These limitations are left for future work.
@@ -540,9 +539,8 @@ These limitations are left for future work.
 
 %\end{document}
 
+\iffalse
 \section{Quanming}
-
-
 
 \subsection{Difference}
 
@@ -648,6 +646,8 @@ To validate this mechanism, we introduce V-scale, a lightweight modification tha
 
 \clearpage
 
+\fi
+
 \section{Model and training configuration}\label{app:config}
 
 Table~\ref{tab:config} summarizes the training configurations used in our experiments.
@@ -657,41 +657,41 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \centering
     \small
     \caption{Training configuration. }\label{tab:config}
-    \begin{tabular}{p{0.3\linewidth}p{0.2\linewidth}p{0.2\linewidth}}
+    \begin{tabular}{p{0.25\linewidth}p{0.15\linewidth}p{0.15\linewidth}p{0.15\linewidth}}
         \toprule
-        Item & 0.1B runs & 0.3B runs \\
+        Item & 0.1B runs & 0.3B runs & 1B runs \\
         \midrule
-        \emph{Model} & & \\
-        total parameters & $\sim$101M & $\sim$291M \\
-        vocab size & 50257 & 50257 \\
-        hidden layers & 16 & 16 \\
-        hidden size & 512 & 1024 \\
-        attention heads & 8 & 8 \\
-        key/value heads & 8 & 4 \\
-        head dimensions & 64 & 128 \\
-        intermediate size & 1408 & 2816 \\
-        RMSNorm $\epsilon$ & 1e-5 & 1e-5 \\
-        RoPE base & 10000 & 10000 \\
+        \emph{Model} & & & \\
+        total parameters & $\sim$101M & $\sim$291M & $\sim$1.04B \\
+        vocab size & 50257 & 50257 & 50257 \\
+        hidden layers & 16 & 16 & 18 \\
+        hidden size & 512 & 1024 & 2048 \\
+        attention heads & 8 & 8 & 16 \\
+        key/value heads & 8 & 4 & 8 \\
+        head dimensions & 64 & 128 & 128 \\
+        intermediate size & 1408 & 2816 & 5504 \\
+        RMSNorm $\epsilon$ & 1e-5 & 1e-5 & 1e-5 \\
+        RoPE base & 10000 & 10000 & 10000 \\
         \midrule
         \emph{Optimizer} & & \\
-        optimizer & AdamW & AdamW \\
-        AdamW $\beta_1$ & 0.9 & 0.9 \\
-        AdamW $\beta_2$ & 0.95 & 0.95 \\
-        AdamW $\epsilon$ & 1e-8 & 1e-8 \\
-        weight decay & 0.01 & 0.01 \\
-        gradient clipping norm & 1.0 & 1.0 \\
-        max learning rate & 5e-4 & 1e-3 \\
-        min learning rate & 5e-5 & 1e-4 \\
+        optimizer & AdamW & AdamW & AdamW \\
+        AdamW $\beta_1$ & 0.9 & 0.9 & 0.9 \\
+        AdamW $\beta_2$ & 0.95 & 0.95 & 0.95 \\
+        AdamW $\epsilon$ & 1e-8 & 1e-8 & 1e-8 \\
+        weight decay & 0.01 & 0.01 & 0.1 \\
+        gradient clipping norm & 1.0 & 1.0 & 1.0 \\
+        max learning rate & 5e-4 & 1e-3 & 1e-3 \\
+        min learning rate & 5e-5 & 1e-4 & 1e-4 \\
         \midrule
         \emph{Training} & & \\
-        learning rate schedule & cosine decay & cosine decay \\
-        total steps & 20000 & 25000 \\
-        warmup steps & 1000 & 1000 \\
-        context length & 1024 & 2048 \\
-        batch size & 512 & 512 \\
-        tokens per step & 0.52M & 1.05M \\
-        total tokens & 10.49B & 26.21B \\
-        training data & C4 & C4 \\
+        learning rate schedule & cosine decay & cosine decay & cosine decay \\
+        total steps & 20000 & 25000 & 25000 \\
+        warmup steps & 1000 & 1000 & 1000 \\
+        context length & 1024 & 2048 & 2048 \\
+        batch size & 512 & 512 & 512 \\
+        tokens per step & 0.52M & 1.05M & 1.05M \\
+        total tokens & 10.49B & 26.21B & 26.21B \\
+        training data & C4 & C4 & C4 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -796,14 +796,14 @@ Using $y_t = \sum\nolimits_{j \le t} a_{tj} v_j$ and Lemma~\ref{lem:softmax-jaco
 \begin{proposition}[Exact value-side gradient]\label{prop:v-exact-app}
 For any sink index $s$, we have
 \[
-    \nabla_{v_s} L = \sum\nolimits_{t=s}^T a_{ts} g_t.
+    \nabla_{v_s} \mathcal{L} = \sum\nolimits_{t=s}^T a_{ts} g_t.
 \]
 \end{proposition}
 \begin{proof}
 For fixed $t$, the Jacobian of $y_t$ with respect to $v_s$ is $\frac{\partial y_t}{\partial v_s} = a_{ts} I \mathbb{I}_{s\le t}$. Applying the chain rule from $v_s \to y_t \to L$ yields
 \[
-    \nabla_{v_s} L
-    = \sum\nolimits_{t=s}^T \left(\frac{\partial y_t}{\partial v_s}\right)^\top \nabla_{y_t} L
+    \nabla_{v_s} \mathcal{L}
+    = \sum\nolimits_{t=s}^T \left(\frac{\partial y_t}{\partial v_s}\right)^\top \nabla_{y_t} \mathcal{L}
     = \sum\nolimits_{t=s}^T (a_{ts} I)^\top g_t
     = \sum\nolimits_{t=s}^T a_{ts} g_t.
 \]
@@ -816,19 +816,19 @@ Define
 \]
 Then we have
 \[
-    \nabla_{k_s} L = \sum\nolimits_{t=1}^T a_{ts} \beta_{ts} \frac{q_t}{\sqrt{d}}.
+    \nabla_{k_s} \mathcal{L} = \sum\nolimits_{t=1}^T a_{ts} \beta_{ts} \frac{q_t}{\sqrt{d}}.
 \]
 \end{proposition}
 \begin{proof}
 The key $k_s$ affects the logits $z_{ts} = \langle q_t, k_s \rangle / \sqrt{d}$ for all $t \ge s$. Since $a_{ts}=0$ when $t<s$, we may sum over all $t$. The chain rule gives
 \[
-    \nabla_{k_s} L
+    \nabla_{k_s} \mathcal{L}
     = \sum\nolimits_{t=1}^T \left(\frac{\partial z_{ts}}{\partial k_s}\right)^\top \frac{\partial L}{\partial z_{ts}}.
 \]
 By $\frac{\partial z_{ts}}{\partial k_s} = \frac{q_t}{\sqrt{d}}$ and Lemma~\ref{lem:yt-logit-app}, we have
 \[
-    \frac{\partial L}{\partial z_{ts}}
-    = \left\langle \nabla_{y_t} L, \frac{\partial y_t}{\partial z_{ts}} \right\rangle
+    \frac{\partial \mathcal{L}}{\partial z_{ts}}
+    = \left\langle \nabla_{y_t} \mathcal{L}, \frac{\partial y_t}{\partial z_{ts}} \right\rangle
     = \langle g_t, a_{ts}(v_s - y_t) \rangle
     = a_{ts} \beta_{ts}.
 \]
@@ -838,23 +838,23 @@ Substituting these two identities gives the claim.
 \begin{proposition}[Exact query-side gradient and first-token corollary]\label{prop:q-exact-app}
 For the query pathway,
 \[
-    \nabla_{q_s} L = \sum\nolimits_{j \le s} a_{sj} \beta_{sj} \frac{k_j}{\sqrt{d}}.
+    \nabla_{q_s} \mathcal{L} = \sum\nolimits_{j \le s} a_{sj} \beta_{sj} \frac{k_j}{\sqrt{d}}.
 \]
 Moreover, under causal masking, we have $\nabla_{q_0} L = 0$.
 \end{proposition}
 \begin{proof}
 The query $q_s$ affects only the logits $\{z_{sj}\}_{j \le s}$. Hence
 \[
-    \nabla_{q_s} L
-    = \sum\nolimits_{j \le s} \left(\frac{\partial z_{sj}}{\partial q_s}\right)^\top \frac{\partial L}{\partial z_{sj}}
+    \nabla_{q_s} \mathcal{L}
+    = \sum\nolimits_{j \le s} \left(\frac{\partial z_{sj}}{\partial q_s}\right)^\top \frac{\partial \mathcal{L}}{\partial z_{sj}}
     = \sum\nolimits_{j \le s} \frac{k_j}{\sqrt{d}} \left\langle g_s, \frac{\partial y_s}{\partial z_{sj}} \right\rangle.
 \]
 Applying Lemma~\ref{lem:yt-logit-app} with row $s$ and column $j$ gives $\frac{\partial y_s}{\partial z_{sj}} = a_{sj}(v_j - y_s)$, so we have
 \[
-    \frac{\partial L}{\partial z_{sj}} = a_{sj} \langle g_s, v_j - y_s \rangle = a_{sj} \beta_{sj}.
+    \frac{\partial \mathcal{L}}{\partial z_{sj}} = a_{sj} \langle g_s, v_j - y_s \rangle = a_{sj} \beta_{sj}.
 \]
 This proves the general formula.
-For $s=0$, causality implies $a_{00}=1$ and $y_0=v_0$. Thus we have $\beta_{00}=0$ and $\nabla_{q_0}L=0$.
+For $s=0$, causality implies $a_{00}=1$ and $y_0=v_0$. Thus we have $\beta_{00}=0$ and $\nabla_{q_0} \mathcal{L}=0$.
 \end{proof}
 
 \subsection{Value-path theorem and deterministic bounds}\label{app:theory:vside}
@@ -883,11 +883,11 @@ Assumption~\ref{assump:mean-noise-app} is the standard decomposition of stochast
 \begin{proof}[Proof of Theorem~\ref{thm:v_second_moment_main}]
 By Proposition~\ref{prop:v-exact-app} and Assumption~\ref{assump:mean-noise-app},
 \[
-    \nabla_{v_s}L = \sum\nolimits_{t=1}^T a_{ts}(\mu + \varepsilon_t) = \left(\sum\nolimits_{t=1}^T a_{ts}\right)\mu + \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t = M_s \mu + \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t.
+    \nabla_{v_s} \mathcal{L} = \sum\nolimits_{t=1}^T a_{ts}(\mu + \varepsilon_t) = \left(\sum\nolimits_{t=1}^T a_{ts}\right)\mu + \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t = M_s \mu + \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t.
 \]
 Therefore,
 \[\begin{aligned}
-    \mathbb{E}\bigl[\|\nabla_{v_s}L\|_2^2\bigr]
+    \mathbb{E}\bigl[\|\nabla_{v_s} \mathcal{L}\|_2^2\bigr]
     &= \mathbb{E}\left[\left\|M_s\mu + \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t\right\|_2^2\right] \\
     &= M_s^2\|\mu\|_2^2 + 2\,\mathbb{E}\left\langle M_s\mu, \sum\nolimits_{t=1}^T a_{ts}\varepsilon_t \right\rangle + \mathbb{E}\left\|\sum\nolimits_{t=1}^T a_{ts}\varepsilon_t\right\|_2^2.
 \end{aligned}\]
@@ -922,11 +922,11 @@ Combining these bounds proves the theorem.
 \begin{corollary}[Deterministic value-side upper bounds]\label{cor:v-deterministic-app}
 For any realization of $\{g_t\}_{t=1}^T$,
 \[
-    \|\nabla_{v_s}L\|_2 \le \sum\nolimits_{t=1}^T a_{ts}\|g_t\|_2 \le M_s \max_t \|g_t\|_2,
+    \|\nabla_{v_s} \mathcal{L}\|_2 \le \sum\nolimits_{t=1}^T a_{ts}\|g_t\|_2 \le M_s \max_t \|g_t\|_2,
 \]
 and also
 \[
-    \|\nabla_{v_s}L\|_2 \le \sqrt{S_s} \left(\sum\nolimits_{t=1}^T \|g_t\|_2^2\right)^{1/2}.
+    \|\nabla_{v_s} \mathcal{L}\|_2 \le \sqrt{S_s} \left(\sum\nolimits_{t=1}^T \|g_t\|_2^2\right)^{1/2}.
 \]
 \end{corollary}
 
@@ -954,14 +954,14 @@ There exist constants $Q_{\max}, B_{\max} > 0$ such that for all $t$,
 \begin{theorem}[Deterministic key-side upper bound]\label{thm:k-bound-app}
 Under Assumption~\ref{assump:k-bounded-app}, we have
 \[
-    \|\nabla_{k_s}L\|_2 \le \frac{Q_{\max} B_{\max}}{\sqrt{d}} M_s.
+    \|\nabla_{k_s} \mathcal{L}\|_2 \le \frac{Q_{\max} B_{\max}}{\sqrt{d}} M_s.
 \]
 \end{theorem}
 
 \begin{proof}
 Starting from Proposition~\ref{prop:k-exact-app} and applying the triangle inequality,
 \[
-    \|\nabla_{k_s}L\|_2
+    \|\nabla_{k_s} \mathcal{L}\|_2
     = \left\|\sum\nolimits_{t=1}^T a_{ts}\beta_{ts} \frac{q_t}{\sqrt{d}}\right\|_2
     \le \sum\nolimits_{t=1}^T a_{ts}|\beta_{ts}|\frac{\|q_t\|_2}{\sqrt{d}}.
 \]
@@ -971,14 +971,14 @@ Using $a_{ts}\ge 0$, $|\beta_{ts}|\le B_{\max}$, and $\|q_t\|_2\le Q_{\max}$ giv
 \begin{lemma}[Row-sum-zero of logits gradients]\label{lem:row-sum-zero-app}
 For a fixed row $s$, we have
 \[
-    \sum\nolimits_{j \le s} \frac{\partial L}{\partial z_{sj}} = 0.
+    \sum\nolimits_{j \le s} \frac{\partial \mathcal{L}}{\partial z_{sj}} = 0.
 \]
 \end{lemma}
 
 \begin{proof}
-The derivation above gives $\frac{\partial L}{\partial z_{sj}} = a_{sj}\langle g_s, v_j - y_s\rangle$. Therefore, we have
+The derivation above gives $\frac{\partial \mathcal{L}}{\partial z_{sj}} = a_{sj}\langle g_s, v_j - y_s\rangle$. Therefore, we have
 \[\begin{aligned}
-    \sum\nolimits_{j \le s} \frac{\partial L}{\partial z_{sj}}
+    \sum\nolimits_{j \le s} \frac{\partial \mathcal{L}}{\partial z_{sj}}
     &= \left\langle g_s, \sum\nolimits_{j \le s} a_{sj}(v_j - y_s) \right\rangle \\
     &= \left\langle g_s, \sum\nolimits_{j \le s} a_{sj}v_j - y_s \sum\nolimits_{j \le s} a_{sj} \right\rangle \\
     &= \langle g_s, y_s - y_s \rangle = 0.
@@ -1001,7 +1001,7 @@ There exist constants $B_{\max}^{(Q)}, \Delta K_{\max} > 0$ such that for all $j
 \begin{theorem}[Deterministic query-side upper bound in dispersion form]\label{thm:q-bound-app}
 Under Assumption~\ref{assump:q-bounded-app},
 \[
-    \|\nabla_{q_s}L\|_2 \le \frac{B_{\max}^{(Q)} \Delta K_{\max}}{\sqrt{d}}.
+    \|\nabla_{q_s} \mathcal{L}\|_2 \le \frac{B_{\max}^{(Q)} \Delta K_{\max}}{\sqrt{d}}.
 \]
 Moreover, under causal attention, $\nabla_{q_0}L = 0$ exactly.
 \end{theorem}
@@ -1009,17 +1009,17 @@ Moreover, under causal attention, $\nabla_{q_0}L = 0$ exactly.
 \begin{proof}
 Using Lemma~\ref{lem:row-sum-zero-app}, for any vector $\bar{k}_s$ we have
 \[
-    \sum\nolimits_{j \le s} \frac{\partial L}{\partial z_{sj}}\bar{k}_s = \bar{k}_s \sum\nolimits_{j \le s} \frac{\partial L}{\partial z_{sj}} = 0.
+    \sum\nolimits_{j \le s} \frac{\partial \mathcal{L}}{\partial z_{sj}}\bar{k}_s = \bar{k}_s \sum\nolimits_{j \le s} \frac{\partial \mathcal{L}}{\partial z_{sj}} = 0.
 \]
 Hence the exact query-side gradient can be rewritten as
 \[
-    \nabla_{q_s}L
-    = \frac{1}{\sqrt{d}} \sum\nolimits_{j \le s} \frac{\partial L}{\partial z_{sj}} (k_j - \bar{k}_s)
+    \nabla_{q_s} \mathcal{L}
+    = \frac{1}{\sqrt{d}} \sum\nolimits_{j \le s} \frac{\partial \mathcal{L}}{\partial z_{sj}} (k_j - \bar{k}_s)
     = \frac{1}{\sqrt{d}} \sum\nolimits_{j \le s} a_{sj}\beta_{sj}(k_j - \bar{k}_s).
 \]
 Taking norms and applying the triangle inequality yields
 \[
-    \|\nabla_{q_s}L\|_2
+    \|\nabla_{q_s} \mathcal{L}\|_2
     \le \frac{1}{\sqrt{d}} \sum\nolimits_{j \le s} a_{sj}|\beta_{sj}|\,\|k_j - \bar{k}_s\|_2.
 \]
 Using $\sum\nolimits_{j \le s} a_{sj}=1$, together with Assumption~\ref{assump:q-bounded-app}, proves the bound.
@@ -1056,7 +1056,7 @@ Then $\frac{\partial}{\partial x}\left(\frac{1}{r}\right) = -\frac{1}{r^2}\frac{
 Now we prove Theorem~\ref{thm:rms_compress_main} in Section~\ref{sec:pressure_reshape}.
 
 \begin{proof}[Proof of Theorem~\ref{thm:rms_compress_main}]
-The chain rule gives $\nabla_x L = J_{\mathrm{rms}}(x)^\top\nabla_y L$. Proposition~\ref{prop:rms-jac-app} implies
+The chain rule gives $\nabla_x \mathcal{L} = J_{\mathrm{rms}}(x)^\top\nabla_y \mathcal{L}$. Proposition~\ref{prop:rms-jac-app} implies
 \[
     J_{\mathrm{rms}}(x) = \frac{1}{r}D \left(I - \frac{x x^\top}{\|x\|_2^2}\right).
 \]
@@ -1068,9 +1068,9 @@ The orthogonal projection matrix $I - \frac{x x^\top}{\|x\|_2^2}$ has eigenvalue
 \end{proof}
 
 \begin{proposition}[Activation norm as a sufficient condition for bounded backpropagated gradients]\label{prop:required-rms-app}
-Fix a target gradient scale $\tau > 0$. A sufficient condition for $\|\nabla_x L\|_2 \le \tau$ is
+Fix a target gradient scale $\tau > 0$. A sufficient condition for $\|\nabla_x \mathcal{L}\|_2 \le \tau$ is
 \[
-    \mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2.
+    \mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y \mathcal{L}\|_2.
 \]
 Thus, for fixed $\tau$ and gain $\gamma$, a larger upstream gradient requires a larger input RMS to keep the backward signal bounded.
 \end{proposition}
@@ -1078,9 +1078,9 @@ Thus, for fixed $\tau$ and gain $\gamma$, a larger upstream gradient requires a 
 \begin{proof}
 By Theorem~\ref{thm:rms_compress_main}, we have
 \[
-    \|\nabla_x L\|_2 \le \frac{\|\gamma\|_\infty}{\mathrm{rms}(x)}\|\nabla_y L\|_2.
+    \|\nabla_x \mathcal{L}\|_2 \le \frac{\|\gamma\|_\infty}{\mathrm{rms}(x)}\|\nabla_y \mathcal{L}\|_2.
 \]
-To make the right-hand side at most $\tau$, it suffices that $\mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y L\|_2$.
+To make the right-hand side at most $\tau$, it suffices that $\mathrm{rms}(x) \ge \frac{\|\gamma\|_\infty}{\tau} \|\nabla_y \mathcal{L}\|_2$.
 \end{proof}
 
 Proposition~\ref{prop:required-rms-app} means that in a pre-norm Transformer, if a token receives unusually large gradient pressure, increasing its token-wise activation norm provides a direct channel for reducing the gradient magnitude passed to earlier layers. This is the mathematical sense in which massive activations can act as a gradient-compression response.
@@ -1156,80 +1156,84 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 
 These results means that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
 
-\subsection{Supporting result for value-state drain}\label{app:theory:vsd}
+% \iffalse
 
-The main paper does not require a full theorem for value-state drain. Nevertheless, it is useful to isolate a principled sufficient mechanism under which stronger sink statistics make nonzero sink values more expensive.
+% \subsection{Supporting result for value-state drain}\label{app:theory:vsd}
 
-Consider varying only the sink value $v_s$ while holding $Q$, $K$, and the other values fixed. Write
-\[
-    y_t(v_s) = m_t v_s + r_t,
-    \quad
-    m_t := a_{ts},
-    \quad
-    r_t := \sum\nolimits_{\substack{j\le t \\ j\neq s}} a_{tj}v_j.
-\]
-Then the induced change in head output is
-\[
-    \Delta o_t = m_t W_O \Delta v_s.
-\]
+% The main paper does not require a full theorem for value-state drain. Nevertheless, it is useful to isolate a principled sufficient mechanism under which stronger sink statistics make nonzero sink values more expensive.
 
-\begin{definition}[Task-aligned drive]\label{def:task-drive-app}
-Under a local quadratic approximation in $v_s$, we write
-\[
-    L(v_s) \approx \mathrm{const} + \langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s,
-\]
-where
-\[
-    b = \sum\nolimits_{t=1}^T m_t W_O^\top \gamma_t,
-    \quad
-    A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O.
-\]
-We call $\|b\|_2$ the \emph{task-aligned drive}, which measures the first-order incentive to make $v_s$ nonzero.
-\end{definition}
+% Consider varying only the sink value $v_s$ while holding $Q$, $K$, and the other values fixed. Write
+% \[
+%     y_t(v_s) = m_t v_s + r_t,
+%     \quad
+%     m_t := a_{ts},
+%     \quad
+%     r_t := \sum\nolimits_{\substack{j\le t \\ j\neq s}} a_{tj}v_j.
+% \]
+% Then the induced change in head output is
+% \[
+%     \Delta o_t = m_t W_O \Delta v_s.
+% \]
 
-\begin{assumption}[Local quadratic model in head outputs]\label{assump:quadratic-app}
-There exist vectors $\gamma_t \in \mathbb{R}^{d_{\mathrm{model}}}$ and symmetric positive semidefinite matrices $H_t \succeq 0$ such that for the perturbations $\{\Delta o_t\}$,
-\[
-    L(\{\Delta o_t\}) = L_0 + \sum\nolimits_{t=1}^T \langle \gamma_t, \Delta o_t\rangle + \frac{1}{2}\sum\nolimits_{t=1}^T \Delta o_t^\top H_t \Delta o_t + o(\|\Delta o\|^2).
-\]
-\end{assumption}
+% \begin{definition}[Task-aligned drive]\label{def:task-drive-app}
+% Under a local quadratic approximation in $v_s$, we write
+% \[
+%     L(v_s) \approx \mathrm{const} + \langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s,
+% \]
+% where
+% \[
+%     b = \sum\nolimits_{t=1}^T m_t W_O^\top \gamma_t,
+%     \quad
+%     A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O.
+% \]
+% We call $\|b\|_2$ the \emph{task-aligned drive}, which measures the first-order incentive to make $v_s$ nonzero.
+% \end{definition}
 
-\begin{theorem}[Curvature-based shrinkage of sink values]\label{thm:as-to-vsd-app}
-Assume Assumption~\ref{assump:quadratic-app}. Suppose further that there exists $\mu>0$ such that $H_t \succeq \mu I$ for all $t$, and that the output projection is nondegenerate on the head subspace with minimum singular value $\sigma_{\min}(W_O)>0$. Then
-\[
-    A \succeq \mu \left(\sum\nolimits_{t=1}^T m_t^2\right) W_O^\top W_O = \mu S_s W_O^\top W_O.
-\]
-Hence the quadratic approximation has unique minimizer $v_s^\star = -A^{-1}b$, and we have
-\[
-    \|v_s^\star\|_2 \le \frac{\|b\|_2}{\mu S_s \sigma_{\min}(W_O)^2}.
-\]
-In particular, when the task-aligned drive $\|b\|_2$ is small, stronger sink structure (larger $S_s$) forces the quadratic minimizer toward smaller value norm.
-\end{theorem}
+% \begin{assumption}[Local quadratic model in head outputs]\label{assump:quadratic-app}
+% There exist vectors $\gamma_t \in \mathbb{R}^{d_{\mathrm{model}}}$ and symmetric positive semidefinite matrices $H_t \succeq 0$ such that for the perturbations $\{\Delta o_t\}$,
+% \[
+%     L(\{\Delta o_t\}) = L_0 + \sum\nolimits_{t=1}^T \langle \gamma_t, \Delta o_t\rangle + \frac{1}{2}\sum\nolimits_{t=1}^T \Delta o_t^\top H_t \Delta o_t + o(\|\Delta o\|^2).
+% \]
+% \end{assumption}
 
-\begin{proof}
-Substituting $\Delta o_t = m_t W_O\Delta v_s$ into Assumption~\ref{assump:quadratic-app} yields the quadratic form in Definition~\ref{def:task-drive-app}. Since each $H_t \succeq \mu I$,
-\[
-    W_O^\top H_t W_O \succeq \mu W_O^\top W_O.
-\]
-Summing with weights $m_t^2$ gives
-\[
-    A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O \succeq \mu \sum\nolimits_{t=1}^T m_t^2 W_O^\top W_O = \mu S_s W_O^\top W_O.
-\]
-Since $\sigma_{\min}(W_O)>0$, this lower bound implies $A \succ 0$. Therefore the quadratic objective is strictly convex and has unique minimizer determined by
-\[
-    \nabla_{v_s}\left(\langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s\right) = b + Av_s = 0,
-\]
-so we have $v_s^\star = -A^{-1}b$ and
-\[
-    \|v_s^\star\|_2 \le \|A^{-1}\|_{\mathrm{op}}\,\|b\|_2 = \frac{\|b\|_2}{\lambda_{\min}(A)}.
-\]
-Since $A \succeq \mu S_s W_O^\top W_O$, we have
-\[
-    \lambda_{\min}(A) \ge \mu S_s\,\lambda_{\min}(W_O^\top W_O) = \mu S_s\,\sigma_{\min}(W_O)^2,
-\]
-which proves the stated bound.
-\end{proof}
+% \begin{theorem}[Curvature-based shrinkage of sink values]\label{thm:as-to-vsd-app}
+% Assume Assumption~\ref{assump:quadratic-app}. Suppose further that there exists $\mu>0$ such that $H_t \succeq \mu I$ for all $t$, and that the output projection is nondegenerate on the head subspace with minimum singular value $\sigma_{\min}(W_O)>0$. Then
+% \[
+%     A \succeq \mu \left(\sum\nolimits_{t=1}^T m_t^2\right) W_O^\top W_O = \mu S_s W_O^\top W_O.
+% \]
+% Hence the quadratic approximation has unique minimizer $v_s^\star = -A^{-1}b$, and we have
+% \[
+%     \|v_s^\star\|_2 \le \frac{\|b\|_2}{\mu S_s \sigma_{\min}(W_O)^2}.
+% \]
+% In particular, when the task-aligned drive $\|b\|_2$ is small, stronger sink structure (larger $S_s$) forces the quadratic minimizer toward smaller value norm.
+% \end{theorem}
 
-This theorem is intentionally positioned as a supporting mechanism. It shows that, under a local curvature model, stronger sink structure increases the curvature penalty on the value state of sink tokens, making a small-norm solution favorable unless the first-order task drive is strong enough to offset that penalty.
+% \begin{proof}
+% Substituting $\Delta o_t = m_t W_O\Delta v_s$ into Assumption~\ref{assump:quadratic-app} yields the quadratic form in Definition~\ref{def:task-drive-app}. Since each $H_t \succeq \mu I$,
+% \[
+%     W_O^\top H_t W_O \succeq \mu W_O^\top W_O.
+% \]
+% Summing with weights $m_t^2$ gives
+% \[
+%     A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O \succeq \mu \sum\nolimits_{t=1}^T m_t^2 W_O^\top W_O = \mu S_s W_O^\top W_O.
+% \]
+% Since $\sigma_{\min}(W_O)>0$, this lower bound implies $A \succ 0$. Therefore the quadratic objective is strictly convex and has unique minimizer determined by
+% \[
+%     \nabla_{v_s}\left(\langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s\right) = b + Av_s = 0,
+% \]
+% so we have $v_s^\star = -A^{-1}b$ and
+% \[
+%     \|v_s^\star\|_2 \le \|A^{-1}\|_{\mathrm{op}}\,\|b\|_2 = \frac{\|b\|_2}{\lambda_{\min}(A)}.
+% \]
+% Since $A \succeq \mu S_s W_O^\top W_O$, we have
+% \[
+%     \lambda_{\min}(A) \ge \mu S_s\,\lambda_{\min}(W_O^\top W_O) = \mu S_s\,\sigma_{\min}(W_O)^2,
+% \]
+% which proves the stated bound.
+% \end{proof}
+
+% This theorem is intentionally positioned as a supporting mechanism. It shows that, under a local curvature model, stronger sink structure increases the curvature penalty on the value state of sink tokens, making a small-norm solution favorable unless the first-order task drive is strong enough to offset that penalty.
+
+% \fi
 
 \end{document}
