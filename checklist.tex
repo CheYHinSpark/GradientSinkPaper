@@ -44,7 +44,7 @@
 \item {\bf Limitations}
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{} % Replace by \answerYes{}, \answerNo{}, or \answerNA{}.
-    \item[] Justification: The paper includes a dedicated ``Limitations'' paragraph after the conclusions. It explicitly notes the restriction to Llama-like dense language models and that the work is a mechanism study rather than a complete account of how AS and MA are learned throughout optimization.
+    \item[] Justification: The paper includes a dedicated ``Limitations'' paragraph after the conclusions. It explicitly notes the restriction to Llama-like dense language models and that the work is a mechanism study on why massive activations are needed rather than a complete account of how they are learned throughout optimization.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper. 
@@ -74,7 +74,7 @@
     \item {\bf Experimental result reproducibility}
     \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
     \item[] Answer: \answerYes{} % Replace by \answerYes{}, \answerNo{}, or \answerNA{}.
-    \item[] Justification: Sections~\ref{sec:prelim}, \ref{sec:as_to_gs}, and~\ref{sec:vscale} define the main observables, intervention, and evaluation setting, and Appendix~\ref{app:config} gives the training hyperparameters.
+    \item[] Justification: Sections~\ref{sec:prelim},~\ref{sec:as_to_gs}, and~\ref{sec:vscale} define the main observables, intervention, and evaluation setting, and Appendix~\ref{app:config} gives the detailed training hyperparameters.
     \item[] Guidelines:
     \begin{itemize}
         \item The answer \answerNA{} means that the paper does not include experiments.
@@ -188,7 +188,7 @@
 
 \item {\bf Licenses for existing assets}
     \item[] Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected?
-    \item[] Answer: \answerNo{} % Replace by \answerYes{}, \answerNo{}, or \answerNA{}.
+    \item[] Answer: \answerYes{} % Replace by \answerYes{}, \answerNo{}, or \answerNA{}.
     \item[] Justification: The paper credits existing assets through citations, but it does not yet explicitly state the licenses, versions, or terms of use for assets such as C4, public pretrained models, and evaluation or tooling packages.
     \item[] Guidelines:
     \begin{itemize}
