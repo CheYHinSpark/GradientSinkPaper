@@ -22,7 +22,9 @@
 \newcolumntype{R}[1]{>{\raggedleft\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 
 \usepackage{amssymb,amsthm,mathtools,bm}
+\usepackage{multirow}
 \usepackage{wrapfig}
+\usepackage[table]{xcolor}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
@@ -754,6 +756,110 @@ Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale
     Validation losses of baseline and V-scale models.
     }\label{fig:validation_loss}
 \end{figure}
+
+\subsection{Downstream tasks}
+
+\begin{table}[h]
+    \centering
+    \caption{niah\_single\_2}%\label{}
+    \begin{tabular}{llcccc}
+        \toprule
+        Model & Quantization & 1024 & 2048 & 4096 & 8192 \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
+        Baseline & bfloat16 & $99.96_{\pm 0.09}$ & $98.00_{\pm 0.69}$ & & \\
+        V-scale & bfloat16 & $100.00_{\pm 0.00}$ & $97.80_{\pm 0.42}$ & & \\
+        Baseline & SmoothQuant & $99.96_{\pm 0.09}$ & $95.92_{\pm 2.09}$ & & \\
+        V-scale & SmoothQuant & $100.00_{\pm 0.00}$ & $95.64_{\pm 0.99}$ & & \\
+        Baseline & BNB & $99.88_{\pm 0.18}$ & $98.36_{\pm 0.86}$ & & \\
+        V-scale & BNB & $100.00_{\pm 0.00}$ & $95.76_{\pm 0.84}$ & & \\
+        Baseline & GPTQ & $99.92_{\pm 0.11}$ & $94.64_{\pm 1.56}$ & & \\
+        V-scale & GPTQ & $100.00_{\pm 0.00}$ & $96.68_{\pm 0.46}$ & & \\
+        Baseline & AWQ & $99.92_{\pm 0.11}$ & $96.56_{\pm 1.24}$ & & \\
+        V-scale & AWQ & $100.00_{\pm 0.00}$ & $97.20_{\pm 0.71}$ & & \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        Baseline & bfloat16 & $99.84_{\pm 0.22}$ & $98.64_{\pm 0.26}$ & $98.20_{\pm 0.66}$ & $94.20_{\pm 0.75}$ \\
+        V-scale & bfloat16 & $99.40_{\pm 0.40}$ & $99.56_{\pm 0.38}$ & $98.32_{\pm 0.41}$ & $99.04_{\pm 0.33}$ \\
+        Baseline & SmoothQuant & $99.72_{\pm 0.23}$ & $97.48_{\pm 0.84}$ & $93.24_{\pm 1.21}$ & $88.40_{\pm 1.67}$ \\
+        V-scale & SmoothQuant & $98.52_{\pm 0.30}$ & $97.96_{\pm 0.17}$ & $93.72_{\pm 0.63}$ & $96.16_{\pm 0.70}$ \\
+        Baseline & BNB & $99.60_{\pm 0.37}$ & $99.20_{\pm 0.37}$ & $98.12_{\pm 0.87}$ & $93.32_{\pm 0.77}$ \\
+        V-scale & BNB & $99.76_{\pm 0.17}$ & $99.96_{\pm 0.09}$ & $99.40_{\pm 0.35}$ & $98.52_{\pm 0.50}$ \\
+        Baseline & GPTQ & $99.80_{\pm 0.20}$ & $97.32_{\pm 0.61}$ & $96.92_{\pm 0.44}$ & $93.08_{\pm 1.18}$ \\
+        V-scale & GPTQ & $99.64_{\pm 0.22}$ & $98.96_{\pm 0.43}$ & $93.52_{\pm 1.14}$ & $97.72_{\pm 0.27}$ \\
+        Baseline & AWQ & $99.72_{\pm 0.23}$ & $97.44_{\pm 0.54}$ & $94.60_{\pm 1.02}$ & $90.84_{\pm 1.07}$ \\
+        V-scale & AWQ & $96.96_{\pm 0.77}$ & $94.56_{\pm 0.52}$ & $92.36_{\pm 1.40}$ & $98.32_{\pm 0.84}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[h]
+    \centering
+    \caption{niah\_single\_3}%\label{}
+    \begin{tabular}{llcccc}
+        \toprule
+        Model & Quantization & 1024 & 2048 & 4096 & 8192 \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
+        Baseline & bfloat16 & $99.68_{\pm 0.11}$ & $85.48_{\pm 1.24}$ & & \\
+        V-scale & bfloat16 & $98.60_{\pm 0.79}$ & $95.60_{\pm 0.95}$ & & \\
+        Baseline & SmoothQuant & $99.00_{\pm 0.28}$ & $79.28_{\pm 0.93}$ & & \\
+        V-scale & SmoothQuant & $96.00_{\pm 0.84}$ & $88.48_{\pm 0.46}$ & & \\
+        Baseline & BNB & $99.32_{\pm 0.18}$ & $79.80_{\pm 1.29}$ & & \\
+        V-scale & BNB & $99.44_{\pm 0.48}$ & $96.40_{\pm 0.51}$ & & \\
+        Baseline & GPTQ & $99.44_{\pm 0.26}$ & $85.84_{\pm 1.88}$ & & \\
+        V-scale & GPTQ & $98.84_{\pm 0.75}$ & $95.84_{\pm 1.13}$ & & \\
+        Baseline & AWQ & $99.44_{\pm 0.26}$ & $96.16_{\pm 1.25}$ & & \\
+        V-scale & AWQ & $91.96_{\pm 1.01}$ & $85.20_{\pm 1.54}$ & & \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        Baseline & bfloat16 & $98.96_{\pm 0.26}$ & $91.56_{\pm 2.03}$ & $79.48_{\pm 1.08}$ & $75.68_{\pm 1.51}$ \\
+        V-scale & bfloat16 & $99.08_{\pm 0.70}$ & $94.36_{\pm 1.01}$ & $77.16_{\pm 1.42}$ & $73.52_{\pm 1.10}$ \\
+        Baseline & SmoothQuant & $97.00_{\pm 0.82}$ & $80.12_{\pm 2.11}$ & $71.96_{\pm 2.07}$ & $64.00_{\pm 1.38}$ \\
+        V-scale & SmoothQuant & $98.56_{\pm 0.84}$ & $84.84_{\pm 1.15}$ & $64.72_{\pm 1.57}$ & $66.92_{\pm 1.20}$ \\
+        Baseline & BNB & $98.60_{\pm 0.63}$ & $89.64_{\pm 1.11}$ & $75.68_{\pm 1.14}$ & $75.52_{\pm 2.39}$ \\
+        V-scale & BNB & $99.16_{\pm 0.48}$ & $98.64_{\pm 0.46}$ & $82.52_{\pm 0.94}$ & $71.72_{\pm 1.98}$ \\
+        Baseline & GPTQ & $98.92_{\pm 0.23}$ & $90.68_{\pm 1.30}$ & $75.72_{\pm 1.32}$ & $73.68_{\pm 0.70}$ \\
+        V-scale & GPTQ & $99.36_{\pm 0.57}$ & $94.36_{\pm 0.99}$ & $61.04_{\pm 1.58}$ & $69.20_{\pm 1.97}$ \\
+        Baseline & AWQ & $98.76_{\pm 0.52}$ & $96.56_{\pm 0.50}$ & $78.24_{\pm 0.74}$ & $74.20_{\pm 1.83}$ \\
+        V-scale & AWQ & $98.24_{\pm 0.75}$ & $87.84_{\pm 1.11}$ & $49.80_{\pm 1.73}$ & $70.56_{\pm 1.98}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[h]
+    \centering
+    \caption{niah\_multikey\_1}%\label{}
+    \begin{tabular}{llcccc}
+        \toprule
+        Model & Quantization & 1024 & 2048 & 4096 & 8192 \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
+        Baseline & bfloat16 & $67.96_{\pm 1.34}$ & $65.04_{\pm 1.09}$ & & \\
+        V-scale & bfloat16 & $73.88_{\pm 1.06}$ & $71.64_{\pm 3.46}$ & & \\
+        Baseline & SmoothQuant & $64.44_{\pm 1.43}$ & $61.64_{\pm 2.91}$ & & \\
+        V-scale & SmoothQuant & $71.64_{\pm 1.44}$ & $69.60_{\pm 2.19}$ & & \\
+        Baseline & BNB & $66.16_{\pm 1.68}$ & $61.60_{\pm 1.83}$ & & \\
+        V-scale & BNB & $74.04_{\pm 1.65}$ & $70.56_{\pm 2.19}$ & & \\
+        Baseline & GPTQ & $66.20_{\pm 1.12}$ & $63.00_{\pm 1.54}$ & & \\
+        V-scale & GPTQ & $67.88_{\pm 1.06}$ & $65.56_{\pm 2.25}$ & & \\
+        Baseline & AWQ & $63.96_{\pm 2.10}$ & $61.68_{\pm 1.52}$ & & \\
+        V-scale & AWQ & $66.84_{\pm 1.75}$ & $67.76_{\pm 3.10}$ & & \\
+        \midrule
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        Baseline & bfloat16 & $57.76_{\pm 2.29}$ & $53.88_{\pm 1.42}$ & $48.00_{\pm 2.58}$ & $48.32_{\pm 1.85}$ \\
+        V-scale & bfloat16 & $59.28_{\pm 1.77}$ & $59.72_{\pm 2.33}$ & $56.16_{\pm 2.39}$ & $62.00_{\pm 1.88}$ \\
+        Baseline & SmoothQuant & $52.44_{\pm 1.84}$ & $49.64_{\pm 1.73}$ & $45.76_{\pm 2.17}$ & $48.96_{\pm 1.89}$ \\
+        V-scale & SmoothQuant & $57.92_{\pm 2.26}$ & $57.92_{\pm 1.98}$ & $52.88_{\pm 1.18}$ & $57.64_{\pm 1.28}$ \\
+        Baseline & BNB & $54.76_{\pm 2.60}$ & $46.28_{\pm 1.38}$ & $42.72_{\pm 2.96}$ & $47.56_{\pm 2.22}$ \\
+        V-scale & BNB & $58.00_{\pm 2.40}$ & $58.40_{\pm 2.20}$ & $55.88_{\pm 1.43}$ & $62.60_{\pm 1.06}$ \\
+        Baseline & GPTQ & $56.28_{\pm 1.64}$ & $50.24_{\pm 0.84}$ & $45.20_{\pm 2.81}$ & $46.72_{\pm 1.56}$ \\
+        V-scale & GPTQ & $56.68_{\pm 1.36}$ & $57.08_{\pm 0.91}$ & $51.16_{\pm 1.61}$ & $58.96_{\pm 2.20}$\\
+        Baseline & AWQ & $54.04_{\pm 1.91}$ & $49.32_{\pm 2.02}$ & $42.52_{\pm 2.98}$ & $47.04_{\pm 2.04}$ \\
+        V-scale & AWQ & $59.24_{\pm 1.31}$ & $59.00_{\pm 1.46}$ & $49.64_{\pm 1.95}$ & $58.48_{\pm 2.02}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
 \section{Additional theoretical results and proofs}\label{app:theory}
 
