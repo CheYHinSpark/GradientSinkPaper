@@ -15,10 +15,6 @@
 \usepackage{enumitem}
 \usepackage{float}
 
-\usepackage{array}
-\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
-\newcolumntype{C}[1]{>{\centering\let\newline  \\\arraybackslash\hspace{0pt}}m{#1}}
-\newcolumntype{R}[1]{>{\raggedleft\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 
 \usepackage{amssymb,amsthm,mathtools,bm}
 \usepackage{multirow}
@@ -41,12 +37,12 @@
 \newcommand{\rms}{\mathrm{rms}}
 
 \usepackage{array}
-\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
-\newcolumntype{C}[1]{>{\centering\let\newline  \\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{L}[1]{>{\raggedright\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 \newcolumntype{R}[1]{>{\raggedleft\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 
 
-\title{Attention Sinks Induce Gradient Sinks}
+\title{Massive Activations as Gradient Regulators in Pre-Norm Transformers}
 \author{
     Yihong Chen \\
     Department of Electronic Engineering\\
@@ -71,8 +67,8 @@ Attention sinks and massive activations are recurring and closely related phenom
 
 \section{Introduction}
 
-\footnote{+qm+ for title,
-	something like ``\textit{Massive Activations as Learned Gradient Regulators in Transformers}'' can be better.}
+% \footnote{+qm+ for title,
+	% something like ``\textit{Massive Activations as Learned Gradient Regulators in Transformers}'' can be better.}
 Two prominent and frequently co-occurring phenomena in Transformer-based large language models (LLMs) are \emph{attention sinks} (AS), where a small number of tokens attract disproportionate attention mass~\cite{xiao2024streamingllm,gu2025when}, and \emph{massive activations} (MA), where activations become unusually large on a small set of tokens and features~\cite{bondarenko2023quantizable,sun2024massive,an2025systematic}. 
 These phenomena are predominantly observed on the first token, particularly in pre-norm LLM architectures.
 
@@ -1246,86 +1242,6 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 \end{proof}
 
 These results means that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
-
-% \iffalse
-
-% \subsection{Supporting result for value-state drain}\label{app:theory:vsd}
-
-% The main paper does not require a full theorem for value-state drain. Nevertheless, it is useful to isolate a principled sufficient mechanism under which stronger sink statistics make nonzero sink values more expensive.
-
-% Consider varying only the sink value $v_s$ while holding $Q$, $K$, and the other values fixed. Write
-% \[
-%     y_t(v_s) = m_t v_s + r_t,
-%     \quad
-%     m_t := a_{ts},
-%     \quad
-%     r_t := \sum\nolimits_{\substack{j\le t \\ j\neq s}} a_{tj}v_j.
-% \]
-% Then the induced change in head output is
-% \[
-%     \Delta o_t = m_t W_O \Delta v_s.
-% \]
-
-% \begin{definition}[Task-aligned drive]\label{def:task-drive-app}
-% Under a local quadratic approximation in $v_s$, we write
-% \[
-%     L(v_s) \approx \mathrm{const} + \langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s,
-% \]
-% where
-% \[
-%     b = \sum\nolimits_{t=1}^T m_t W_O^\top \gamma_t,
-%     \quad
-%     A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O.
-% \]
-% We call $\|b\|_2$ the \emph{task-aligned drive}, which measures the first-order incentive to make $v_s$ nonzero.
-% \end{definition}
-
-% \begin{assumption}[Local quadratic model in head outputs]\label{assump:quadratic-app}
-% There exist vectors $\gamma_t \in \mathbb{R}^{d_{\mathrm{model}}}$ and symmetric positive semidefinite matrices $H_t \succeq 0$ such that for the perturbations $\{\Delta o_t\}$,
-% \[
-%     L(\{\Delta o_t\}) = L_0 + \sum\nolimits_{t=1}^T \langle \gamma_t, \Delta o_t\rangle + \frac{1}{2}\sum\nolimits_{t=1}^T \Delta o_t^\top H_t \Delta o_t + o(\|\Delta o\|^2).
-% \]
-% \end{assumption}
-
-% \begin{theorem}[Curvature-based shrinkage of sink values]\label{thm:as-to-vsd-app}
-% Assume Assumption~\ref{assump:quadratic-app}. Suppose further that there exists $\mu>0$ such that $H_t \succeq \mu I$ for all $t$, and that the output projection is nondegenerate on the head subspace with minimum singular value $\sigma_{\min}(W_O)>0$. Then
-% \[
-%     A \succeq \mu \left(\sum\nolimits_{t=1}^T m_t^2\right) W_O^\top W_O = \mu S_s W_O^\top W_O.
-% \]
-% Hence the quadratic approximation has unique minimizer $v_s^\star = -A^{-1}b$, and we have
-% \[
-%     \|v_s^\star\|_2 \le \frac{\|b\|_2}{\mu S_s \sigma_{\min}(W_O)^2}.
-% \]
-% In particular, when the task-aligned drive $\|b\|_2$ is small, stronger sink structure (larger $S_s$) forces the quadratic minimizer toward smaller value norm.
-% \end{theorem}
-
-% \begin{proof}
-% Substituting $\Delta o_t = m_t W_O\Delta v_s$ into Assumption~\ref{assump:quadratic-app} yields the quadratic form in Definition~\ref{def:task-drive-app}. Since each $H_t \succeq \mu I$,
-% \[
-%     W_O^\top H_t W_O \succeq \mu W_O^\top W_O.
-% \]
-% Summing with weights $m_t^2$ gives
-% \[
-%     A = \sum\nolimits_{t=1}^T m_t^2 W_O^\top H_t W_O \succeq \mu \sum\nolimits_{t=1}^T m_t^2 W_O^\top W_O = \mu S_s W_O^\top W_O.
-% \]
-% Since $\sigma_{\min}(W_O)>0$, this lower bound implies $A \succ 0$. Therefore the quadratic objective is strictly convex and has unique minimizer determined by
-% \[
-%     \nabla_{v_s}\left(\langle b, v_s\rangle + \frac{1}{2}v_s^\top A v_s\right) = b + Av_s = 0,
-% \]
-% so we have $v_s^\star = -A^{-1}b$ and
-% \[
-%     \|v_s^\star\|_2 \le \|A^{-1}\|_{\mathrm{op}}\,\|b\|_2 = \frac{\|b\|_2}{\lambda_{\min}(A)}.
-% \]
-% Since $A \succeq \mu S_s W_O^\top W_O$, we have
-% \[
-%     \lambda_{\min}(A) \ge \mu S_s\,\lambda_{\min}(W_O^\top W_O) = \mu S_s\,\sigma_{\min}(W_O)^2,
-% \]
-% which proves the stated bound.
-% \end{proof}
-
-% This theorem is intentionally positioned as a supporting mechanism. It shows that, under a local curvature model, stronger sink structure increases the curvature penalty on the value state of sink tokens, making a small-norm solution favorable unless the first-order task drive is strong enough to offset that penalty.
-
-% \fi
 
 
 \newpage
