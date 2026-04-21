@@ -11,7 +11,6 @@
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
-\usepackage{xcolor}         % colors
 
 \usepackage{enumitem}
 \usepackage{float}
@@ -40,6 +39,11 @@
 \newcommand{\ip}[2]{\left\langle#1,#2\right\rangle}
 \newcommand{\softmax}{\mathrm{softmax}}
 \newcommand{\rms}{\mathrm{rms}}
+
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline  \\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\let\newline \\\arraybackslash\hspace{0pt}}m{#1}}
 
 
 \title{Attention Sinks Induce Gradient Sinks}
@@ -181,7 +185,9 @@ validates this mechanism through targeted intervention on the gradient flow.
 \section{From attention sink to gradient sink}\label{sec:as_to_gs}
 
 We show both empirically and theoretically that AS induce gradient concentration, 
-forming gradient sinks. This section establishes the key link between forward attention patterns and backward training signals.
+forming gradient sinks. 
+Thus,
+we connect forward attention patterns and backward training signals.
 
 \subsection{Empirical observations}
 
@@ -376,11 +382,7 @@ For each attention head, after the standard value projection and before value ag
 \]
 where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as illustrated in Figure~\ref{fig:architecture}.
 
-\begin{wrapfigure}[12]{r}{0.36\linewidth}
-	\centering
-	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
-	\label{fig:architecture}
-\end{wrapfigure}
+
 
 This map is chosen to satisfy three design desiderata.
 First, it does not affect the attention weights that depend only on $Q$ and $K$.
@@ -388,6 +390,13 @@ Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1
 Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ when $r\ll C$.
 This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
+
+\begin{wrapfigure}[12]{r}{0.36\linewidth}
+	\centering
+	\vspace{-10px}
+	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
+	\label{fig:architecture}
+\end{wrapfigure}
 
 In practice we use a scaled reparameterization $C_{\ell,h} = (d_{\mathrm{head}}\sigma)^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the standard deviation employed for initializing the weight matrix in \texttt{LlamaForCausalLM} baselines and $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
 % 为什么这样初始化
@@ -452,11 +461,10 @@ Overall, these observations match the qualitative prediction of our mechanism: b
 \begin{table}[tb]
 \centering
 \caption{Zero-shot reasoning performance and language modeling perplexity for 0.3B models under bfloat16 and five post-training quantization protocols. V-scale consistently matches or exceeds baseline performance. Lower is better for PPL columns; higher is better for all accuracy columns. The bolded values denote the optimal performance in each quantization precision.}\label{tab:quant_03b_main}
-\setlength{\tabcolsep}{4pt}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{llccccccccc}
+\setlength{\tabcolsep}{1.5pt}
+\begin{tabular}{llc C{1.4CM} C{1.3CM} c C{1CM} C{1CM} ccc}
 \toprule
-Model & Setting & Wikitext & Lambada PPL & Lambada Acc & PIQA & HellaSwag & ARC-Easy & SciQ & COPA & BoolQ \\
+Model & Setting & Wikitext & Lambada PPL & Lambada Acc & PIQA & Hella Swag & ARC-Easy & SciQ & COPA & BoolQ \\
 \midrule
 Baseline & bfloat16    & 33.22 & 37.11 & 32.14 & 67.14 & 37.94 & \textbf{40.95} & \textbf{63.50} & 69.00 & 59.60 \\
 V-scale & bfloat16     & \textbf{33.06} & \textbf{34.69} & \textbf{33.65} & \textbf{67.52} & \textbf{38.19} & 40.40 & 62.30 & \textbf{71.00} & \textbf{59.85} \\
@@ -474,7 +482,6 @@ Baseline & AWQ         & 34.28 & 40.12 & 31.65 & 66.92 & 37.81 & \textbf{41.54} 
 V-scale & AWQ          & 34.06 & \textbf{38.29} & \textbf{32.70} & 66.87 & 37.85 & 39.73 & 62.60 & 67.00 & 60.43 \\
 \bottomrule
 \end{tabular}
-}
 \end{table}
 
 \paragraph{Downstream performance}
@@ -482,6 +489,7 @@ To verify that the suppression of massive activations via V-scale does not compr
 
 \begin{wraptable}[22]{r}{0.5\linewidth}
 \centering
+\vspace{-15px}
 \caption{Needle-in-a-Haystack (NIAH) retrieval accuracy (\%) across different context lengths and quantization settings. V-scale preserves retrieval performance well while preventing the severe degradation under quantization at longer contexts.}\label{tab:quant_03b_niah}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{llcccc}
