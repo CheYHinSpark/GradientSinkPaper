@@ -449,62 +449,8 @@ The results are consistent across both model scales. On the AS metrics, V-scale 
 The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, this direct attenuation is modest in magnitude compared with the reduction in the learned MLP spikes. 
 Overall, these observations match the qualitative prediction of our mechanism: by providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs, rather than merely shrinking the attention output.
 
-\begin{table}[tb]
-\centering
-\caption{Zero-shot reasoning performance and language modeling perplexity for 0.3B models under bfloat16 and five post-training quantization protocols. V-scale consistently matches or exceeds baseline performance. Lower is better for PPL columns; higher is better for all accuracy columns. The bolded values denote the optimal performance in each quantization precision.}\label{tab:quant_03b_main}
-\setlength{\tabcolsep}{4pt}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{llccccccccc}
-\toprule
-Model & Setting & Wikitext & Lambada PPL & Lambada Acc & PIQA & HellaSwag & ARC-Easy & SciQ & COPA & BoolQ \\
-\midrule
-Baseline & bfloat16    & 33.22 & 37.11 & 32.14 & 67.14 & 37.94 & \textbf{40.95} & \textbf{63.50} & 69.00 & 59.60 \\
-V-scale & bfloat16     & \textbf{33.06} & \textbf{34.69} & \textbf{33.65} & \textbf{67.52} & \textbf{38.19} & 40.40 & 62.30 & \textbf{71.00} & \textbf{59.85} \\
-\midrule
-Baseline & Naive W8A8  & 34.62 & 41.83 & 30.76 & 66.97 & 37.50 & 40.57 & \textbf{64.30} & 70.00 & 59.36 \\
-V-scale & Naive W8A8   & 35.14 & 43.91 & 30.29 & 66.43 & 37.65 & 40.11 & 61.50 & \textbf{72.00} & \textbf{59.88} \\
-Baseline & SmoothQuant & 33.35 & 37.53 & 32.06 & 67.19 & 37.91 & \textbf{40.66} & 63.80 & 69.00 & \textbf{59.88} \\
-V-scale & SmoothQuant  & \textbf{33.20} & \textbf{34.88} & \textbf{33.50} & \textbf{67.36} & \textbf{38.24} & 40.11 & 61.80 & 71.00 & 59.57 \\
-\midrule
-Baseline & bnb W4A16   & 36.23 & 56.31 & 27.21 & 66.76 & 37.97 & 40.28 & 62.80 & 68.00 & 58.44 \\
-V-scale & bnb W4A16    & 35.94 & 49.34 & 27.87 & 67.25 & 38.19 & 39.10 & 61.10 & \textbf{70.00} & 58.56 \\
-Baseline & GPTQ        & 33.94 & 39.85 & 31.42 & 66.97 & 37.85 & 40.74 & \textbf{64.30} & 67.00 & \textbf{60.61} \\
-V-scale & GPTQ         & \textbf{33.76} & 38.65 & 32.62 & \textbf{67.57} & \textbf{38.44} & 40.61 & 62.30 & 69.00 & 59.69 \\
-Baseline & AWQ         & 34.28 & 40.12 & 31.65 & 66.92 & 37.81 & \textbf{41.54} & 64.00 & 69.00 & \textbf{60.61} \\
-V-scale & AWQ          & 34.06 & \textbf{38.29} & \textbf{32.70} & 66.87 & 37.85 & 39.73 & 62.60 & 67.00 & 60.43 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-
 \paragraph{Downstream performance}
 To verify that the suppression of massive activations via V-scale does not compromise fundamental capabilities, we evaluate our 0.3B models on a suite of downstream tasks. We further assess robustness under post-training quantization (PTQ), since massive activations manifest as extreme outliers that are known to severely degrade quantized inference. We employ the LM Evaluation Harness~\cite{eval-harness} and compare models under standard \texttt{bfloat16} precision as well as five PTQ protocols spanning diverse design points: naive symmetric INT8 quantization (Naive W8A8)~\cite{gholami2021survey}, SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization.
-
-\begin{wraptable}[22]{r}{0.5\linewidth}
-\centering
-\caption{Needle-in-a-Haystack (NIAH) retrieval accuracy (\%) across different context lengths and quantization settings. V-scale preserves retrieval performance well while preventing the severe degradation under quantization at longer contexts.}\label{tab:quant_03b_niah}
-\setlength{\tabcolsep}{2pt}
-\begin{tabular}{llcccc}
-\toprule
-Model & Setting & 512 & 1024 & 1536 & 2048 \\
-\midrule
-Baseline & bfloat16    & 100.0 & 99.1& 98.4 & 82.5 \\
-V-scale & bfloat16     & 100.0 & 100.0 & 96.9 & 87.9 \\
-\midrule
-Baseline & Naive W8A8  & 99.9 & 93.8 & 93.5 & 72.8 \\
-V-scale & Naive W8A8   & 100.0 & 98.2 & 90.4 & 65.6 \\
-Baseline & SmoothQuant & 99.9 & 98.5 & 97.4 & 79.1 \\
-V-scale & SmoothQuant  & 100.0 & 100.0 & 96.3 & 88.2 \\
-\midrule
-Baseline & bnb W4A16   & 99.9 & 91.8 & 86.2 & 64.3 \\
-V-scale & bnb W4A16    & 99.7 & 100.0 & 97.1 & 90.2 \\
-Baseline & GPTQ        & 100.0 & 98.8 & 98.7 & 87.7 \\
-V-scale & GPTQ         & 100.0 & 100.0 & 99.8 & 90.7 \\
-Baseline & AWQ         & 100.0 & 97.7 & 93.6 & 67.9 \\
-V-scale & AWQ          & 100.0 & 99.5 & 91.8 & 89.1 \\
-\bottomrule
-\end{tabular}
-\end{wraptable}
 
 Table~\ref{tab:quant_03b_main} reports language modeling perplexity and zero-shot reasoning accuracy. Under bfloat16 and all quantization settings, the V‑scale model performs on par with or even surpasses the baseline, confirming that substantially reducing activations does not compromise its representational capacity. 
 
@@ -759,6 +705,34 @@ Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale
 
 \subsection{Downstream tasks}
 
+
+
+\begin{table}[h]
+    \centering
+    \caption{}%\label{}
+    \resizebox{\linewidth}{!}{
+	\setlength\tabcolsep{2pt}
+    \begin{tabular}{llcccccccccccc}
+        \toprule
+        Model & Quantization & Wiki ppl & Lambada ppl & Lambada acc & ARC-C & ARC-E & BoolQ & COPA & HellaSwag & OBQA & PIQA & SCIQ & WinoGrande \\
+        \midrule
+        Baseline & bfloat16 & 22.84 & 15.27 & 43.28 & 24.91 & 47.98 & 51.38 & 69.00 & 51.59 & 31.40 & 72.52 & 69.90 & 54.22 \\
+        V-scale & bfloat16 & 22.83 & 15.91 & 43.37 & 27.05 & 47.47 & 56.27 & 70.00 & 51.29 & 32.80 & 71.49 & 69.30 & 53.28 \\
+        Baseline & SmoothQuant & 23.17 & 16.61 & 43.02 & 25.26 & 47.47 & 50.92 & 67.00 & 51.49 & 30.80 & 72.47 & 69.00 & 55.17 \\
+        V-scale & SmoothQuant & 23.01 & 16.58 & 43.14 & 26.11 & 46.76 & 55.57 & 69.00 & 51.13 & 32.40 & 71.00 & 68.30 & 54.46 \\
+        Baseline & BNB & 23.49 & 16.40 & 42.73 & 25.00 & 47.43 & 54.19 & 72.00 & 51.59 & 31.40 & 73.01 & 69.20 & 55.56 \\
+        V-scale & BNB & 23.40 & 15.86 & 43.55 & 27.56 & 47.05 & 55.96 & 74.00 & 51.29 & 32.80 & 71.27 & 69.50 & 54.14 \\
+        Baseline & GPTQ & 23.21 & 15.70 & 43.26 & 25.77 & 48.48 & 52.54 & 68.00 & 51.61 & 31.60 & 72.85 & 69.20 & 54.70 \\
+        V-scale & GPTQ & 23.17 & 16.48 & 43.76 & 26.79 & 46.80 & 56.45 & 70.00 & 51.31 & 32.40 & 71.44 & 68.40 & 54.70 \\
+        Baseline & AWQ & 23.32 & 16.34 & 42.44 & 25.26 & 48.06 & 53.64 & 68.00 & 51.23 & 30.60 & 72.47 & 69.40 & 54.30 \\
+        V-scale & AWQ & 23.36 & 16.95 & 43.06 & 26.71 & 47.10 & 55.96 & 69.00 & 50.88 & 33.20 & 71.65 & 69.10 & 53.51 \\
+        \bottomrule
+    \end{tabular}
+    }
+\end{table}
+
+
+
 \begin{table}[h]
     \centering
     \caption{niah\_single\_2}%\label{}
@@ -778,7 +752,7 @@ Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale
         Baseline & AWQ & $99.92_{\pm 0.11}$ & $96.56_{\pm 1.24}$ & & \\
         V-scale & AWQ & $100.00_{\pm 0.00}$ & $97.20_{\pm 0.71}$ & & \\
         \midrule
-        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN-Extension} (yarn\_factor$=4$)} \\
         Baseline & bfloat16 & $99.84_{\pm 0.22}$ & $98.64_{\pm 0.26}$ & $98.20_{\pm 0.66}$ & $94.20_{\pm 0.75}$ \\
         V-scale & bfloat16 & $99.40_{\pm 0.40}$ & $99.56_{\pm 0.38}$ & $98.32_{\pm 0.41}$ & $99.04_{\pm 0.33}$ \\
         Baseline & SmoothQuant & $99.72_{\pm 0.23}$ & $97.48_{\pm 0.84}$ & $93.24_{\pm 1.21}$ & $88.40_{\pm 1.67}$ \\
@@ -812,7 +786,7 @@ Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale
         Baseline & AWQ & $99.44_{\pm 0.26}$ & $96.16_{\pm 1.25}$ & & \\
         V-scale & AWQ & $91.96_{\pm 1.01}$ & $85.20_{\pm 1.54}$ & & \\
         \midrule
-        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN-Extension} (yarn\_factor$=4$)} \\
         Baseline & bfloat16 & $98.96_{\pm 0.26}$ & $91.56_{\pm 2.03}$ & $79.48_{\pm 1.08}$ & $75.68_{\pm 1.51}$ \\
         V-scale & bfloat16 & $99.08_{\pm 0.70}$ & $94.36_{\pm 1.01}$ & $77.16_{\pm 1.42}$ & $73.52_{\pm 1.10}$ \\
         Baseline & SmoothQuant & $97.00_{\pm 0.82}$ & $80.12_{\pm 2.11}$ & $71.96_{\pm 2.07}$ & $64.00_{\pm 1.38}$ \\
@@ -846,7 +820,7 @@ Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale
         Baseline & AWQ & $63.96_{\pm 2.10}$ & $61.68_{\pm 1.52}$ & & \\
         V-scale & AWQ & $66.84_{\pm 1.75}$ & $67.76_{\pm 3.10}$ & & \\
         \midrule
-        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with Yarn-Extension} (yarn\_factor$=4$)} \\
+        \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN-Extension} (yarn\_factor$=4$)} \\
         Baseline & bfloat16 & $57.76_{\pm 2.29}$ & $53.88_{\pm 1.42}$ & $48.00_{\pm 2.58}$ & $48.32_{\pm 1.85}$ \\
         V-scale & bfloat16 & $59.28_{\pm 1.77}$ & $59.72_{\pm 2.33}$ & $56.16_{\pm 2.39}$ & $62.00_{\pm 1.88}$ \\
         Baseline & SmoothQuant & $52.44_{\pm 1.84}$ & $49.64_{\pm 1.73}$ & $45.76_{\pm 2.17}$ & $48.96_{\pm 1.89}$ \\
