@@ -62,7 +62,7 @@
 \maketitle
 
 \begin{abstract}
-Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. Existing studies have largely focused on the forward pass, leaving open whether their connection is a direct structural consequence or is mediated by a training-time mechanism. We study this question from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. In pre-norm architectures with RMSNorm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training. This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts value-path backpropagated gradients. In pretrained V-scale models, attention sinks are preserved whereas massive activations are suppressed. These results support gradient sink as a key training-time mediator linking attention sinks and massive activations. Our code is available at \href{https://anonymous.4open.science/}{Anonymous GitHub}.
+Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. Existing studies have largely focused on the forward pass, leaving open whether their connection is a direct structural consequence or is mediated by a training-time mechanism. We study this question from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. In pre-norm architectures with RMSNorm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training. This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts value-path backpropagated gradients. In pretrained V-scale models, attention sinks are preserved whereas massive activations are suppressed. These results support gradient sink as a key training-time mediator linking attention sinks and massive activations. Our code is available at \href{https://anonymous.4open.science/}{https://anonymous.4open.science/}.
 \end{abstract}
 
 \section{Introduction}
@@ -78,19 +78,18 @@ These phenomena are predominantly observed on the first token and are of signifi
 
 Existing explanations have largely approached this question from the forward pass. MA is often described as helping to create sink formation~\cite{sun2024massive,su2026unveiling,queipo-de-llano2026attention}. However, in modern pre-norm architectures, both attention and MLP sublayers operate on normalized inputs~\cite{zhang2019rmsnorm,xiong2020layernorm,touvron2023llama}. Locally, the forward computation depends much more strongly on the direction of representation than on its norm. This makes MA appear somewhat unnecessary or even wasteful. Most interventions in the literature modify trained models post hoc by changing MLP outputs or token activations and observe joint changes in AS and MA. While informative, such interventions do not constitute sufficiently clean causal evidence for their relationship, because both magnitude and direction are perturbed at the same time. Recent works that examine training dynamics~\cite{gallegofeliciano2026hiddendynamics,queipo-de-llano2026attention} provide valuable additional perspectives, but still do not directly isolate the backward mechanism linking sink structure to activation growth. Likewise, showing that AS and MA can be decoupled by architectural changes~\cite{sun2026spike} does not by itself explain why they are learned to be coupled in standard architectures.
 
-Our starting point is a structural insight about attention. In an attention head under causal masking, if a sink token is repeatedly read by many later tokens in the forward pass, it is natural to ask whether training signals from those positions are also collected there in the backward pass. This routing structure can turn a forward attention imbalance into a backward concentration of gradients on the same token, which we call a \emph{gradient sink} (GS). In pre-norm Transformers with RMSNorm, such localized gradient pressure can be partially offset because the RMSNorm Jacobian contains a local scaling factor inversely proportional to the input activation norm. Massive activations may therefore be understood not as the direct mechanistic cause of attention sinks, but as learned gradient regulators that respond to the gradient pressure induced by attention sinks and help maintain stable residual-stream gradient transport. This interpretation further predicts that relieving such pressure through an alternative attenuation route should reduce reliance on massive activations even while attention sinks remain present.
+Our starting point is a structural insight about attention: attention weights route not only forward value aggregation, but also backward gradient aggregation. In an attention head under causal masking, when many later tokens assign attention mass to one sink token, their training signals are likewise routed back to that token. This turns a forward attention imbalance into a backward concentration of gradients on the same token, which we call a \emph{gradient sink} (GS). In pre-norm Transformers with RMSNorm, such localized gradient pressure can be partially offset because the RMSNorm Jacobian contains a local scaling factor inversely proportional to the input activation norm. Massive activations may therefore be understood not as the direct mechanistic cause of attention sinks, but as learned gradient regulators that respond to the gradient pressure induced by attention sinks and help maintain stable residual-stream gradient transport. This interpretation further predicts that relieving such pressure through an alternative attenuation route should reduce reliance on massive activations even while attention sinks remain present.
 
 The rest of the paper develops and tests this claim in three steps. We first establish empirically that gradient sinks are widespread across Transformer models and show theoretically that, under causal masking, sink structure provides a natural route to gradient aggregation. We then examine how this localized pressure is handled in pre-norm Transformers, showing that RMSNorm-mediated gradient attenuation aligns closely with activation scale, consistent with massive activations acting as gradient regulators. Finally, we test the prediction with \emph{V-scale}, a simple value-path modification for Transformer attention. V-scale applies a norm-dependent radial scaling to value states before attention aggregation and leaves the query-key attention weights unchanged, selectively attenuating the dominant value-path gradients. Across model sizes, V-scale largely preserves attention sink behavior while substantially suppressing massive activations, especially in the residual stream and MLP outputs. Moreover, this modification yields practical benefits. V-scale models show better long-context retrieval performance, including under several post-training quantization settings.
 
 Our contributions are thus threefold. First, we shift the explanation of attention sinks and massive activations from a purely forward-pass story to a backward-pass one by introducing \emph{gradient sinks} as the missing training-time mechanism. Second, we show that in pre-norm RMSNorm Transformers, massive activations can be interpreted as learned regulators of localized gradient pressure. Third, we propose \emph{V-scale}, a simple value-path intervention that turns this mechanism into a causal test and a practical lever for improving long-context retrieval.
 
-\section{Preliminaries}
+\section{Setup}
 \label{sec:prelim}
 
-Here,
-we formalize the Transformer architecture, along with forward and backward observables. These definitions lay the groundwork for studying gradient concentration in subsequent sections.
+We introduce the notation needed for the main empirical and theoretical developments.
 
-\paragraph{Pre-norm Transformers}
+\paragraph{Pre-norm Transformer and attention notation}
 We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs~\cite{touvron2023llama,zhang2019rmsnorm,su2021rope,shazeer2020gluvariants}.
 Let $H^\ell = (h_0^\ell,\dots,h_{T-1}^\ell)^\top \in \mathbb{R}^{T\times d_{\mathrm{model}}}$ denote the hidden states inputting to layer $\ell$.
 A pre-norm block updates the sequence as
@@ -102,10 +101,10 @@ A pre-norm block updates the sequence as
     R^{\mathrm{mlp},\ell} &= \mathrm{MLP}(\widetilde H^{\ell+\frac12}), &
     H^{\ell+1} &= H^{\ell+\frac12} + R^{\mathrm{mlp},\ell}.
 \end{aligned}\]
-The Attention block can be either multi-head attention (MHA)~\cite{vaswani2017attention} or a variant such as grouped-query attention (GQA)~\cite{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. With RoPE, the query, key, and value states at token position $t$ are $q_t = R_t W_Q \widetilde h_t$, $k_t = R_t W_K \widetilde h_t$, and $v_t = W_V \widetilde h_t$, where $R_t\in\mathbb{R}^{d_{\mathrm{head}}\times d_{\mathrm{head}}}$ is the RoPE rotation matrix. Then the causal attention logits and weights are computed by $z_{tj}=\frac{\langle q_t,k_j\rangle}{\sqrt d}+m_{tj}$ and $a_{tj}=\mathrm{softmax}(z_{t,:})_j$, where $m_{tj}=0$ for $j\le t$, and $-\infty$ otherwise.
+The Attention block can be either multi-head attention (MHA)~\cite{vaswani2017attention} or a variant such as grouped-query attention (GQA)~\cite{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. With RoPE, the query, key, and value states at token position $t$ are $q_t = R_t W_Q \widetilde h_t$, $k_t = R_t W_K \widetilde h_t$, and $v_t = W_V \widetilde h_t$, where $R_t\in\mathbb{R}^{d_{\mathrm{head}}\times d_{\mathrm{head}}}$ is the RoPE rotation matrix. The causal attention logits and weights are computed by $z_{tj}=\frac{\langle q_t,k_j\rangle}{\sqrt d}+m_{tj}$ and $a_{tj}=\mathrm{softmax}(z_{t,:})_j$, where $m_{tj}=0$ for $j\le t$, and $-\infty$ otherwise.
 Finally we have the value aggregation $y_t = \sum\nolimits_{j\le t} a_{tj} v_j$ and head output $o_t = W_O y_t$.
 
-\paragraph{Forward metrics for attention sinks and activations}
+\paragraph{Sink statistics and activation sites}
 For a candidate sink position $s$ (typically the first token, i.e., $s=0$), we follow~\cite{gu2025when,queipo-de-llano2026attention} and use thresholded criteria to count sink-like behavior:
 \begin{equation}\label{eq:sink_rate}
     \text{Sink}_s^{\epsilon,\ell} = \frac{1}{H} \sum\nolimits_{h=1}^H \mathbb{I}(\alpha_s^{\ell,h} > \epsilon),
@@ -125,85 +124,39 @@ where $H$ is the number of attention heads in each layer. Following prior work~\
 \end{equation}
 The quantity $\overline M_s$ is the average attention mass routed through token $s$ by all causally allowed future queries and $\overline S_s$ is a second-moment version. In experiments, we focus on the first token ($s=0$) and further summarize \eqref{eq:sink_mass} across heads and layers.
 
-For activations, many prior studies identify MA as \emph{single} activation magnitudes that are large where both token and feature axes are considered~\cite{bondarenko2023quantizable,sun2024massive}. 
-In this work, we focus on \emph{token-wise} behaviors, so we identify MA as large token-wise activation norms at an explicitly chosen computational site~\cite{guo2025activedormant}, including the input of Transformer layers $\|h_{t,\mathrm{in}}^\ell\|=\|h_t^\ell\|_2$, the output of Transformer layers $\|h_{t,\mathrm{out}}^\ell\|=\|h_t^{\ell+1}\|_2$, and the hidden states after Attention $\|h_{t,\mathrm{half}}^\ell\|=\|h_t^{\ell+{1}/{2}}\|_2$.
-We also measure the output of the MLP and the value state.
+For token-wise activation analyses, we track activation norms at several computational sites, including the input of Transformer layers $\|h_{t,\mathrm{in}}^\ell\|=\|h_t^\ell\|_2$, the hidden states after Attention $\|h_{t,\mathrm{half}}^\ell\|=\|h_t^{\ell+{1}/{2}}\|_2$, and the output of Transformer layers $\|h_{t,\mathrm{out}}^\ell\|=\|h_t^{\ell+1}\|_2$. We also measure the output of the MLP and the value state when needed.
 
-\paragraph{Backward observables}
-We introduce token-wise gradient observables and local gradient-reshaping ratios that expose where gradient pressure is created and how it is subsequently reshaped inside pre-norm residual branches.
-
-Let $\mathcal{L}$ denote the training loss and $\widetilde h_t^{\ell}$ denote the token representation after RMSNorm and before the QKV projections. To quantify gradient behavior at this site, we compare the candidate sink token against a set of early non-sink positions: % TODO 定义一下T_e
-\begin{equation}\label{eq:gs_def}
-R_{GS}^{\ell}(s) :=
-\frac{\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2}{\frac{1}{T_e} \sum_{t\le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2}.
-\end{equation}
-A model exhibits a gradient sink at position $s$ if $R_{GS}^{\ell}(s)\gg 1$ across a substantial fraction of layers. % 我们为什么不定义一个固定的阈值？因为具体的数值可能与多种因素相关，但是>>1足以体现token间的不均衡性，刻画了最基本的Gradient Sink现象。
-Next, 
-recalling that $h_t^{\ell+{1}/{2}} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ for Attention blocks, we have $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path.
-We then define three ratios by
-\begin{equation}\label{eq:ratios_attn}
-\begin{aligned}
-    \mathrm{Bloat}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, \\
-    \mathrm{Compress}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2, \\
-    \mathrm{Change}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}\|_2
-\end{aligned}
-\end{equation}
-Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ in the same way for MLP branch.
+% \paragraph{Backward observables}
+% We introduce token-wise gradient observables and local gradient-reshaping ratios that expose where gradient pressure is created and how it is subsequently reshaped inside pre-norm residual branches.
+%
+% Let $\mathcal{L}$ denote the training loss and $\widetilde h_t^{\ell}$ denote the token representation after RMSNorm and before the QKV projections. To quantify gradient behavior at this site, we compare the candidate sink token against a set of early non-sink positions: % TODO 定义一下T_e
+% \begin{equation}\label{eq:gs_def}
+% R_{GS}^{\ell}(s) :=
+% \frac{\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2}{\frac{1}{T_e} \sum_{t\le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2}.
+% \end{equation}
+% A model exhibits a gradient sink at position $s$ if $R_{GS}^{\ell}(s)\gg 1$ across a substantial fraction of layers.
+% Next,
+% recalling that $h_t^{\ell+{1}/{2}} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ for Attention blocks, we have $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path.
+% We then define three ratios by
+% \begin{equation}\label{eq:ratios_attn}
+% \begin{aligned}
+%     \mathrm{Bloat}_t^{\mathrm{attn},\ell}
+%     &:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, \\
+%     \mathrm{Compress}_t^{\mathrm{attn},\ell}
+%     &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2, \\
+%     \mathrm{Change}_t^{\mathrm{attn},\ell}
+%     &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+{1}/{2}}}\mathcal{L}\|_2
+% \end{aligned}
+% \end{equation}
+% Analogously, we define ratios $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ in the same way for MLP branch.
 % The terminology is chosen to match the observation we later show in Section~\ref{sec:pressure_reshape}.
 
-With above definitions, 
-we are ready to examine the training dynamics induced by attention structure. 
-Section~\ref{sec:as_to_gs} shows that attention sinks lead to concentrated gradients, forming gradient sinks.
-In Section~\ref{sec:pressure_reshape}, 
-we analyze how such localized gradient pressure is reshaped by the network and associated with massive activations. 
-Finally, Section~\ref{sec:vscale}
-validates this mechanism through targeted intervention on the gradient flow.
+\section{When attention sinks become gradient sinks}\label{sec:as_to_gs}
 
-\section{From attention sink to gradient sink}\label{sec:as_to_gs}
+This section traces how forward sink structure reappears in backpropagation.
+We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on C4~\cite{raffel2020exploring} at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}. % plan: 下面这句很怪，因为马上展示的Gradient不是这样聚合的。先注释掉不删除。Unless otherwise stated, token-wise statistics are averaged over evaluation batches, and attention-based quantities are additionally averaged over heads.
 
-We show both empirically and theoretically that AS induce gradient concentration, 
-forming gradient sinks. 
-Thus,
-we connect forward attention patterns and backward training signals.
-
-\subsection{Empirical observations}
-
-We train \texttt{LlamaForCausalLM} models from scratch and analyze checkpoints throughout training. The models are pretrained on C4 dataset~\cite{raffel2020exploring} using AdamW optimizer.
-We consider two model sizes, approximately 0.1B and 0.3B parameters. 
-Detailed model and training configurations are listed in Appendix~\ref{app:config}.
-We save checkpoints every 1000 steps during training. 
-At each checkpoint, we run one forward-backward pass using the same causal language modeling objective as in training and collect token-wise statistics.
-Unless otherwise stated, these statistics are averaged over the full evaluation batches, and the AS metrics are additionally averaged over heads.
-
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.23\textwidth]{pics/01B_baseline/AS_mass_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/01B_baseline/AS_eps_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/01B_baseline/MA_x_out_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/01B_baseline/MA_mlp_out_compare.pdf}
-    \includegraphics[width=0.046\textwidth]{pics/01B_baseline/extreme_steps.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/03B_baseline/AS_mass_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/03B_baseline/AS_eps_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/03B_baseline/MA_x_out_compare.pdf}
-    \includegraphics[width=0.23\textwidth]{pics/03B_baseline/MA_mlp_out_compare.pdf}
-    \includegraphics[width=0.046\textwidth]{pics/03B_baseline/extreme_steps.pdf}
-    \caption{
-    Forward phenomena in baseline models.
-    Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
-    We compare the first token (token 0) with the mean and maximum over the rest early tokens (positions 1--15).
-    The results confirm the co-occurrence of AS and MA.
-    }\label{fig:baseline_forward_main}
-\end{figure}
-
-Figure~\ref{fig:baseline_forward_main} summarizes the forward patterns. 
-In both model sizes, the sink token is sharply distinguished from the other early tokens on both Sink Mass $\overline M_s^\ell$ 
-in \eqref{eq:sink_mass} and $\mathrm{Sink}_s^{\epsilon,\ell}$ in \eqref{eq:sink_rate}. 
-On the other hand, the residual outputs at the first token are broadly elevated across layers, and the strongest amplification is concentrated in a small number of MLP blocks. 
-These results confirm that AS and MA already co-occur clearly in small pre-norm Transformers.
+\subsection{Gradient sinks are widespread and structured}
 
 \begin{figure}[tb]
     \centering
@@ -213,16 +166,35 @@ These results confirm that AS and MA already co-occur clearly in small pre-norm 
     \includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
-    \caption{Gradient sink phenomenon in pretrained models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted while other early tokens share a common color. The median and IQR of $R_{GS}^{\ell}$ are also reported. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B. These show that gradient sinks are a common phenomenon in pretrained models, where the sink token exhibiting substantially larger gradients than other early tokens.
+    \caption{
+    Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted, while the remaining early tokens share a common color. The reported median and IQR of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, token 0 consistently exhibits the strongest gradient concentration. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
     }\label{fig:gs-definition}
 \end{figure}
 
-We now turn to the backward pass and collect the gradients arriving at the post-RMSNorm attention input. We first aggregate gradients over the full batch exactly as in one optimization step, and then take the $l_2$ norm for each token. This makes the resulting token-wise gradients directly comparable to the effective training signal used by the optimizer.
-Figure~\ref{fig:gs-definition} shows that the sink token exhibits substantially larger gradients than other early tokens. This significant gradient imbalance is observed in both baseline models and larger pretrained models, suggesting that gradient sink is a common feature of Transformer training dynamics. 
+We measure token-wise gradients at the post-RMSNorm attention input and compare a candidate sink position $s$ against the other early positions up to a cutoff $T_e$, where $0 \le s \le T_e$. Define the gradient-sink ratio $R_{GS}^{\ell}(s)$ as the gradient norm on token $s$ divided by the mean gradient norm over the remaining positions in $\{0,\dots,T_e\}$:
+\begin{equation}\label{eq:gs_def}
+R_{GS}^{\ell}(s) :=
+\frac{\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2}{\frac{1}{T_e} \sum_{0 \le t \le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2},
+\end{equation}
+Throughout the main experiments we take $s=0$ and $T_e=31$.
+Gradients are first aggregated over the full batch exactly as in one optimization step and then converted to token-wise $l_2$ norms, making the comparison directly reflect the effective training signal seen by the optimizer.
+
+Figure~\ref{fig:gs-definition} shows that the sink token consistently exhibits substantially larger gradients than other early tokens, with the reported medians of $R_{GS}^{\ell}(0)$ remaining well above $1$ across all models. % plan: 等图中数值信息最终定下来之后，再在正文里补一句更具体的量级描述会更稳妥；现在先保留“well above 1”比较安全。
+Gradient sinks therefore appear as a common empirical pattern in training of Transformer language models.
 
 \begin{remark}
-While the gradients collected from large pretrained models are computed post hoc under conditions different from their official training, the robust presence of gradient sinks across models and scales suggests it is an intrinsic structural property rather than a sensitive result of specific hyperparameter schedules. 
+While the gradients collected from large pretrained models are computed post hoc under conditions different from their official training, the robust presence of gradient sinks across models and scales suggests that this phenomenon reflects an intrinsic structural property rather than a sensitive dependence on particular hyperparameter schedules.
 \end{remark}
+
+To understand how this concentration is structured inside the attention block, we further decompose the attention-block gradients into query, key, and value pathways and track their token-wise norms across training checkpoints. For each token $s$, the incoming gradient splits as
+\begin{equation}\label{eq:qkv_gradients}
+\nabla_{\widetilde h_s^\ell}\mathcal{L}
+= W_Q^\top \nabla_{q_s^\ell}\mathcal{L}
++ W_K^\top \nabla_{k_s^\ell}\mathcal{L}
++ W_V^\top \nabla_{v_s^\ell}\mathcal{L},
+\end{equation}
+so the observed token-wise concentration can be examined pathway by pathway. For each pathway, the statistics are averaged over layers.
+% 连续3个pathway，too ugly
 
 \begin{figure}[tb]
     \centering
@@ -235,58 +207,28 @@ While the gradients collected from large pretrained models are computed post hoc
     \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
     \includegraphics[width=0.06\textwidth]{pics/03B_baseline/line_steps.pdf}
     \caption{
-    Token-wise gradient norms of QKV across training checkpoints.
-    Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers.
-    In both scales, key and especially value gradients exhibit a pronounced spike at token 0.
+    Token-wise gradient norms of QKV across training checkpoints. Top row: 0.1B model; bottom row: 0.3B model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. In both scales, key and especially value gradients exhibit a pronounced spike at token 0. % plan: 我计划只展示一个自己训练的模型的结果（是否1B的就好），如果后续还有空间，我计划放一个open Source model的，其余的放入Appendix
     }\label{fig:qkv_grads_over_tokens}
 \end{figure}
 
-To analyze the structure of gradient sinks, we further break down the attention block gradients into query, key, and value pathways.
-For each pathway, the statistics are averaged over layers.
-Figure~\ref{fig:qkv_grads_over_tokens} shows a clear and highly structured asymmetry.
-On the key and value pathways, the gradient norm exhibits a pronounced spike at the first token across checkpoints, after which it drops rapidly and remains relatively flat over most of the sequence.
-Moreover, the value-path spikes are observed to be substantially larger than the key-side ones.
-The query pathway looks qualitatively different and its token-wise gradient profile is comparatively flat across most positions.
-In fact, the query gradient at the first token is exactly zero under causal masking.
+Figure~\ref{fig:qkv_grads_over_tokens} reveals a clear and highly structured asymmetry. On the key and value pathways, the gradient norm exhibits a pronounced spike at the first token across checkpoints, after which it drops rapidly and remains relatively flat over most of the sequence. Moreover, the value-path spike is consistently larger than the key-side one. By contrast, the query pathway looks qualitatively different: its token-wise gradient profile is much flatter, and the first-token query gradient is exactly zero under causal masking.
 
-Thus, 
-these observations establish the central empirical fact of this section:
-in pretrained Transformer models, the sink token is not only a forward attention sink but also a backward gradient sink.
+These observations sharpen the empirical picture. Gradient sinks concentrate primarily in the pathways whose gradients can aggregate across many later tokens, with the value path standing out most strongly.
 
-\subsection{Theoretical results}\label{subsec:theory_as_to_gs}
+\subsection{Massive activations align with local gradient reshaping}
 
-We next show that the link of AS and GS is not just an empirical regularity.
-This subsection focuses exclusively on the most central theoretical framework. 
-Supplementary theoretical results and complete proofs are provided in Appendix~\ref{app:theory}.
-
-Let $g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}$ denote the upstream gradient. Recall that $M_s$ and $S_s$ in \eqref{eq:sink_mass} denote the attention column mass and its second moment, respectively. Then by direct computation we have the exact V-side gradients $\nabla_{v_s}\mathcal{L} = \sum\nolimits_{t=1}^{T} a_{ts} g_t$.
-This identity exposes that the gradient on $v_s$ is an attention-weighted sum of all upstream gradients whose outputs read value from token $s$. If many later tokens attend to token $s$, then many later gradients also pass through $v_s$. To formalize this intuition, we adopt a mean-plus-noise decomposition $g_t = \mu + \varepsilon_t$ for stochastic gradients~\cite{mandt2017sgd, mccandlish2018noise}.
-
-\begin{theorem}[V-side gradient control by sink statistics]\label{thm:v_second_moment_main}
-Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))| \le \rho$ for all $t \ne t'$. Then we have
-\[
-M_s^2\|\mu\|_2^2
-\le
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
-\le
-M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s).
-\]
-\end{theorem}
-
-Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. 
-The same derivation also yields exact query/key-path gradients, see Propositions~\ref{prop:k-exact-app} and~\ref{prop:q-exact-app} in Appendix~\ref{app:theory}.
-The crucial asymmetry is that K-side gradients aggregate column-wise just as V-side ones, while Q-side gradients are row-local.
-These match our measurements that the sink token shows strong value/key gradient concentration but no special query-path advantage.
-
-\section{Gradient reshaping by massive activations}
-\label{sec:pressure_reshape}
-
-Section~\ref{sec:as_to_gs} established that attention sinks induce a pronounced gradient sink on the first token. The next question is why this matters for optimization. The key issue is that such concentration creates a persistent local optimization burden that must be reshaped before it can be propagated through a deep residual network. If the sink token repeatedly receives much larger branch-local gradients than other tokens, one would expect either disproportionately strong local updates or a distortion of gradient transport along the residual stream. From this perspective, GS is a pressure that the network must absorb while keeping training in a stable regime. 
-
-This section examines how the localized gradient pressure is reshaped and whether the observed MA pattern aligns with a concrete gradient-compression mechanism in pre-norm architectures.
-For each layer of a checkpoint, we compare the activation norms of the attention branch input $\|h_{\mathrm{in}}^\ell\|$, against three ratios defined in \eqref{eq:ratios_attn}: $\mathrm{Bloat}^{\mathrm{attn},\ell}$, $\mathrm{Compress}^{\mathrm{attn},\ell}$, and $\mathrm{Change}^{\mathrm{attn},\ell}$.
-The same measurements for the MLP branch are deferred to Appendix~\ref{app:mlp_reshaping}.
+The previous subsection compared different tokens. We now ask how the gradient acting on the same token changes as it passes through the attention branch, in order to see whether the localized pressure at the sink token is amplified, attenuated, or transmitted nearly unchanged at the residual level. For the attention branch, recall that $h_t^{\ell+\frac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ and therefore $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+\frac12}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\frac12}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path. We introduce three diagnostics that track where branch-local pressure is created, how strongly it is attenuated, and how much net change remains:
+\begin{equation}\label{eq:ratios_attn}
+\begin{aligned}
+    \mathrm{Bloat}_t^{\mathrm{attn},\ell}
+    &:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, \\
+    \mathrm{Compress}_t^{\mathrm{attn},\ell}
+    &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\frac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2, \\
+    \mathrm{Change}_t^{\mathrm{attn},\ell}
+    &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\frac12}}\mathcal{L}\|_2.
+\end{aligned}
+\end{equation}
+Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ for the MLP branch; those measurements are deferred to Appendix~\ref{app:mlp_reshaping}.
 
 \begin{figure}[tb]
     \centering
@@ -299,41 +241,241 @@ The same measurements for the MLP branch are deferred to Appendix~\ref{app:mlp_r
     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea4_Change.pdf}
     \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
     \caption{
-    Scatter plots relating gradient reshaping to input activation norms of Attention block. Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, 
-    $\log_{10}\mathrm{Compress}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, and
-    $\log_{10}\mathrm{Change}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$.
-    Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
-    Large-activation points of token 0 occupy the high-bloat regime. Compression exhibits an approximately linear inverse relationship with activation scale. The net residual-level change remains concentrated near $\log_{10}1=0$ except for a small set of first-layer points.
+    Scatter plots relating local gradient reshaping to input activation norms of the Attention block. Top row: 0.1B model; bottom row: 0.3B model. From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, $\log_{10}\mathrm{Compress}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, and $\log_{10}\mathrm{Change}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$. Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
     }\label{fig:attn_scatter_main}
 \end{figure}
 
-Figure~\ref{fig:attn_scatter_main} shows that these three ratios play sharply different roles.
-The scatter plots are colored by token groups.
-In the left panel, large-activation points concentrate in the high-bloat regime dominated by token 0, while the remaining tokens occupy a much milder regime.
-This means that the gradient norms of the sink token are not merely large in an absolute sense but are most strongly amplified in the attention branch.
+Figure~\ref{fig:attn_scatter_main} shows that these three ratios play sharply different empirical roles. The left panel first identifies where branch-local pressure is created: large-activation points, dominated by token 0, occupy the high-bloat regime, whereas the remaining tokens stay in a much milder region. One might then expect this pressure to distort residual-stream transport, but the right panel shows that the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, except for a small set of first-layer points. The middle panel helps explain this empirical compatibility: $\mathrm{Compress}^{\mathrm{attn}}$ lies on an almost linear trend with slope $-1$, indicating that stronger local attenuation is tightly aligned with larger activation norm.
 
-The middle panel shows that $\mathrm{Compress}^{\mathrm{attn}}$ lies on an almost linear trend with slope $-1$, indicating that RMSNorm-mediated attenuation is closely aligned with activation scale.
+Taken together, these measurements show that the sink token is not only where gradient pressure is strongest, but also where activation scale is most tightly aligned with local gradient reshaping. This empirical pattern motivates the mechanistic question addressed next: why should sink structure create such localized pressure in the first place, and why should large activations be positioned to absorb it?
 
-The right panel explains why this alignment matters.
-Although $\mathrm{Bloat}^{\mathrm{attn}}$ can become very large on the first token, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, except for some points located in the lower-right corner from the first layer.
-Thus the localized gradient pressure revealed by $\mathrm{Bloat}^{\mathrm{attn}}$ is largely reshaped into a regime compatible with stable residual propagation.
-This observation is consistent with the broader literature, in which residual networks are thought to remain optimizable at depth as the signal propagation stays appropriately close to identity, rather than drifting into systematic explosion or collapse~\cite{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2024deepnet}.
+\section{From sink structure to gradient regulation}\label{sec:pressure_reshape}
 
-The empirical alignment between massive activations and strong compression is not accidental.
-It follows from a basic property of RMSNorm.
+Section~\ref{sec:as_to_gs} established three empirical facts: gradient sinks are widespread, the asymmetry is strongest on the value and key pathways, and large activations align with a distinctive pattern of local gradient reshaping in pre-norm attention blocks. We now explain why these facts fit together. The central mechanism has two parts. First, attention sink structure creates a direct route for backward gradient aggregation. Second, RMSNorm creates a direct route for attenuating the resulting localized pressure. Together, these ingredients connect attention sinks, gradient sinks, and massive activations within one training-time picture. Proofs are deferred to Appendix~\ref{app:theory}.
+
+\subsection{Exact backward identities expose the route to aggregation}
+
+For one attention head, stack the token-wise value states and aggregated outputs row-wise into matrices $V$ and $Y$, and let $A$ denote the causal attention matrix, so that $Y = AV$. Let $G := \nabla_Y \mathcal{L}$ denote the matrix of upstream gradients, whose $t$-th row is $g_t := \nabla_{y_t}\mathcal{L}$.
+
+\begin{proposition}[Exact value-path aggregation]\label{prop:v_agg_main}
+For one attention head, the value-path backward signal satisfies
+\[
+\nabla_V \mathcal{L} = A^\top G.
+\]
+Equivalently, for any token index $s$,
+\[
+\nabla_{v_s}\mathcal{L} = \sum\nolimits_{t=s}^{T} a_{ts} g_t.
+\]
+\end{proposition}
+
+This identity is the structural reason for looking at backpropagation in the first place. A forward attention sink is a column effect in $A$: many later rows place substantial mass on one early column. On the value path, backward propagation multiplies by $A^\top$, so the same column becomes a channel that aggregates gradients from many later tokens. In other words, once sink structure appears in the forward pass, a route to gradient concentration already exists in the exact backward equations.
+
+The exact key and query identities clarify the empirical asymmetry observed in Section~\ref{sec:as_to_gs}. Key-side gradients also inherit a column-wise aggregation pattern, whereas query-side gradients remain row-local; in particular, the first-token query gradient is exactly zero under causal masking. We defer these formulas and their proofs to Appendix~\ref{app:theory:exact}, but this structural asymmetry already explains why the value path is the dominant channel in our measurements.
+
+\subsection{Sink statistics control localized gradient pressure}
+
+The exact identity above shows where concentration can come from. The next question is whether sink statistics control its magnitude in a quantitatively explicit way. The answer is yes.
+
+\begin{theorem}[V-side gradient control by sink statistics]\label{thm:v_second_moment_main}
+Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))| \le \rho$ for all $t \ne t'$. Then we have
+\[
+M_s^2\|\mu\|_2^2
+\le
+\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
+\le
+M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s).
+\]
+\end{theorem}
+
+Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. Larger sink mass $M_s$ strengthens the coherent component of the gradient, while the second moment $S_s$ controls how stochastic variability is accumulated along the same path. This makes gradient sinks more than a descriptive empirical phenomenon: once a token consistently serves as a sink in the attention matrix, the same structure directly amplifies the backward signal routed through its value state.
+
+This theorem also sharpens the interpretation of the asymmetry seen in Section~\ref{sec:as_to_gs}. The dominant value-path spike is not accidental; it is exactly the pathway on which sink statistics most transparently govern gradient aggregation. The supporting key/query formulas in Appendix~\ref{app:theory:kq} show that key-side gradients retain a related column-wise dependence, whereas query-side gradients do not, matching the empirical hierarchy value $>$ key $\gg$ query.
+
+\subsection{RMSNorm makes activation scale a viable regulator}
+
+Once sink structure creates persistent localized pressure, the next question is why activation scale should matter for handling it in a pre-norm architecture. The answer comes from the Jacobian of RMSNorm.
 
 \begin{theorem}[Activation-dependent compression under RMSNorm]\label{thm:rms_compress_main}
 Denote $y=\mathrm{RMSNorm}(x) = \gamma \odot \frac{x}{\rms(x)}$ with $\rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon}$, and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
 Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian satisfies $\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{\rms(x)}$.
 \end{theorem}
 
-The proof is deferred to Appendix~\ref{app:theory}.
-The theorem formalizes a key intuition that larger incoming activation norm provides a direct route to stronger local attenuation of backpropagated gradients.
+Theorem~\ref{thm:rms_compress_main} formalizes a key point: larger token-wise activation norm directly lowers the worst-case gain from upstream gradients to earlier layers. Appendix~\ref{app:theory:rmsnorm} makes this implication even more explicit, showing that for any target gradient scale, sufficiently large input RMS is enough to keep the backpropagated signal below that scale. This is the mathematical sense in which large activations can act as gradient regulators rather than merely as pathological outliers.
 
-In total, we observe that localized gradients are not merely large but selectively processed by pre-norm computation.
-In the attention branch, the sink token exhibits strong branch-local amplification, strong normalization-induced attenuation, and only limited net gradient change.
-These results support the mechanism whereby massive activations attenuate localized gradient pressure through RMSNorm.
+Combining this theorem with the results above yields the mechanism suggested by our empirical measurements. Attention sinks create localized gradient pressure because the same attention column that accumulates forward mass also aggregates backward gradients. RMSNorm then turns activation scale into a local attenuation factor. Massive activations are therefore well positioned to emerge as responses to sink-induced pressure, helping preserve stable residual-stream gradient transport while absorbing the burden created by gradient sinks.
+
+% \section{From attention sink to gradient sink}\label{sec:as_to_gs}
+
+% We show both empirically and theoretically that AS induce gradient concentration, 
+% forming gradient sinks. 
+% Thus,
+% we connect forward attention patterns and backward training signals.
+
+% \subsection{Empirical observations}
+
+% We train \texttt{LlamaForCausalLM} models from scratch and analyze checkpoints throughout training. The models are pretrained on C4 dataset~\cite{raffel2020exploring} using AdamW optimizer.
+% We consider two model sizes, approximately 0.1B and 0.3B parameters. 
+% Detailed model and training configurations are listed in Appendix~\ref{app:config}.
+% We save checkpoints every 1000 steps during training. 
+% At each checkpoint, we run one forward-backward pass using the same causal language modeling objective as in training and collect token-wise statistics.
+% Unless otherwise stated, these statistics are averaged over the full evaluation batches, and the AS metrics are additionally averaged over heads.
+
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=0.23\textwidth]{pics/01B_baseline/AS_mass_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/01B_baseline/AS_eps_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/01B_baseline/MA_x_out_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/01B_baseline/MA_mlp_out_compare.pdf}
+%     \includegraphics[width=0.046\textwidth]{pics/01B_baseline/extreme_steps.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/03B_baseline/AS_mass_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/03B_baseline/AS_eps_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/03B_baseline/MA_x_out_compare.pdf}
+%     \includegraphics[width=0.23\textwidth]{pics/03B_baseline/MA_mlp_out_compare.pdf}
+%     \includegraphics[width=0.046\textwidth]{pics/03B_baseline/extreme_steps.pdf}
+%     \caption{
+%     Forward phenomena in baseline models.
+%     Top row: 0.1B model; bottom row: 0.3B model.
+%     From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
+%     We compare the first token (token 0) with the mean and maximum over the rest early tokens (positions 1--15).
+%     The results confirm the co-occurrence of AS and MA.
+%     }\label{fig:baseline_forward_main}
+% \end{figure}
+
+% Figure~\ref{fig:baseline_forward_main} summarizes the forward patterns. 
+% In both model sizes, the sink token is sharply distinguished from the other early tokens on both Sink Mass $\overline M_s^\ell$ 
+% in \eqref{eq:sink_mass} and $\mathrm{Sink}_s^{\epsilon,\ell}$ in \eqref{eq:sink_rate}. 
+% On the other hand, the residual outputs at the first token are broadly elevated across layers, and the strongest amplification is concentrated in a small number of MLP blocks. 
+% These results confirm that AS and MA already co-occur clearly in small pre-norm Transformers.
+
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
+%     \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
+%     \includegraphics[width=0.48\textwidth]{pics/Qwen2__5_7B/violin.pdf}
+%     \includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
+%     \includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
+%     \includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
+%     \caption{Gradient sink phenomenon in pretrained models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted while other early tokens share a common color. The median and IQR of $R_{GS}^{\ell}$ are also reported. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B. These show that gradient sinks are a common phenomenon in pretrained models, where the sink token exhibiting substantially larger gradients than other early tokens.
+%     }\label{fig:gs-definition}
+% \end{figure}
+
+% We now turn to the backward pass and collect the gradients arriving at the post-RMSNorm attention input. We first aggregate gradients over the full batch exactly as in one optimization step, and then take the $l_2$ norm for each token. This makes the resulting token-wise gradients directly comparable to the effective training signal used by the optimizer.
+% Figure~\ref{fig:gs-definition} shows that the sink token exhibits substantially larger gradients than other early tokens. This significant gradient imbalance is observed in both baseline models and larger pretrained models, suggesting that gradient sink is a common feature of Transformer training dynamics. 
+
+% \begin{remark}
+% While the gradients collected from large pretrained models are computed post hoc under conditions different from their official training, the robust presence of gradient sinks across models and scales suggests it is an intrinsic structural property rather than a sensitive result of specific hyperparameter schedules. 
+% \end{remark}
+
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dq_over_tokens.pdf}
+%     \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dk_over_tokens.pdf}
+%     \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dv_over_tokens.pdf}
+%     \includegraphics[width=0.06\textwidth]{pics/01B_baseline/line_steps.pdf}
+%     \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dq_over_tokens.pdf}
+%     \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dk_over_tokens.pdf}
+%     \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
+%     \includegraphics[width=0.06\textwidth]{pics/03B_baseline/line_steps.pdf}
+%     \caption{
+%     Token-wise gradient norms of QKV across training checkpoints.
+%     Top row: 0.1B model; bottom row: 0.3B model.
+%     From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers.
+%     In both scales, key and especially value gradients exhibit a pronounced spike at token 0.
+%     }\label{fig:qkv_grads_over_tokens}
+% \end{figure}
+
+% To analyze the structure of gradient sinks, we further break down the attention block gradients into query, key, and value pathways.
+% For each pathway, the statistics are averaged over layers.
+% Figure~\ref{fig:qkv_grads_over_tokens} shows a clear and highly structured asymmetry.
+% On the key and value pathways, the gradient norm exhibits a pronounced spike at the first token across checkpoints, after which it drops rapidly and remains relatively flat over most of the sequence.
+% Moreover, the value-path spikes are observed to be substantially larger than the key-side ones.
+% The query pathway looks qualitatively different and its token-wise gradient profile is comparatively flat across most positions.
+% In fact, the query gradient at the first token is exactly zero under causal masking.
+
+% Thus, 
+% these observations establish the central empirical fact of this section:
+% in pretrained Transformer models, the sink token is not only a forward attention sink but also a backward gradient sink.
+
+% \subsection{Theoretical results}\label{subsec:theory_as_to_gs}
+
+% We next show that the link of AS and GS is not just an empirical regularity.
+% This subsection focuses exclusively on the most central theoretical framework. 
+% Supplementary theoretical results and complete proofs are provided in Appendix~\ref{app:theory}.
+
+% Let $g_t := \nabla_{y_t}\mathcal{L} = W_O^\top \nabla_{o_t}\mathcal{L}$ denote the upstream gradient. Recall that $M_s$ and $S_s$ in \eqref{eq:sink_mass} denote the attention column mass and its second moment, respectively. Then by direct computation we have the exact V-side gradients $\nabla_{v_s}\mathcal{L} = \sum\nolimits_{t=1}^{T} a_{ts} g_t$.
+% This identity exposes that the gradient on $v_s$ is an attention-weighted sum of all upstream gradients whose outputs read value from token $s$. If many later tokens attend to token $s$, then many later gradients also pass through $v_s$. To formalize this intuition, we adopt a mean-plus-noise decomposition $g_t = \mu + \varepsilon_t$ for stochastic gradients~\cite{mandt2017sgd, mccandlish2018noise}.
+
+% \begin{theorem}[V-side gradient control by sink statistics]\label{thm:v_second_moment_main}
+% Assume $g_t = \mu + \varepsilon_t$, where $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t)) \le \sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))| \le \rho$ for all $t \ne t'$. Then we have
+% \[
+% M_s^2\|\mu\|_2^2
+% \le
+% \mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
+% \le
+% M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s).
+% \]
+% \end{theorem}
+
+% Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. 
+% The same derivation also yields exact query/key-path gradients, see Propositions~\ref{prop:k-exact-app} and~\ref{prop:q-exact-app} in Appendix~\ref{app:theory}.
+% The crucial asymmetry is that K-side gradients aggregate column-wise just as V-side ones, while Q-side gradients are row-local.
+% These match our measurements that the sink token shows strong value/key gradient concentration but no special query-path advantage.
+
+% \section{Gradient reshaping by massive activations}
+% \label{sec:pressure_reshape}
+
+% Section~\ref{sec:as_to_gs} established that attention sinks induce a pronounced gradient sink on the first token. The next question is why this matters for optimization. The key issue is that such concentration creates a persistent local optimization burden that must be reshaped before it can be propagated through a deep residual network. If the sink token repeatedly receives much larger branch-local gradients than other tokens, one would expect either disproportionately strong local updates or a distortion of gradient transport along the residual stream. From this perspective, GS is a pressure that the network must absorb while keeping training in a stable regime. 
+
+% This section examines how the localized gradient pressure is reshaped and whether the observed MA pattern aligns with a concrete gradient-compression mechanism in pre-norm architectures.
+% For each layer of a checkpoint, we compare the activation norms of the attention branch input $\|h_{\mathrm{in}}^\ell\|$, against three ratios defined in \eqref{eq:ratios_attn}: $\mathrm{Bloat}^{\mathrm{attn},\ell}$, $\mathrm{Compress}^{\mathrm{attn},\ell}$, and $\mathrm{Change}^{\mathrm{attn},\ell}$.
+% The same measurements for the MLP branch are deferred to Appendix~\ref{app:mlp_reshaping}.
+
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea3_Bloat.pdf}
+%     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea1_compress.pdf}
+%     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea4_Change.pdf}
+%     \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}
+%     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea3_Bloat.pdf}
+%     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea1_compress.pdf}
+%     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Ea4_Change.pdf}
+%     \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
+%     \caption{
+%     Scatter plots relating gradient reshaping to input activation norms of Attention block. Top row: 0.1B model; bottom row: 0.3B model.
+%     From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, 
+%     $\log_{10}\mathrm{Compress}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$, and
+%     $\log_{10}\mathrm{Change}^{\mathrm{attn}}$ vs.\ $\log_{10}\|h_{\mathrm{in}}\|$.
+%     Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
+%     Large-activation points of token 0 occupy the high-bloat regime. Compression exhibits an approximately linear inverse relationship with activation scale. The net residual-level change remains concentrated near $\log_{10}1=0$ except for a small set of first-layer points.
+%     }\label{fig:attn_scatter_main}
+% \end{figure}
+
+% Figure~\ref{fig:attn_scatter_main} shows that these three ratios play sharply different roles.
+% The scatter plots are colored by token groups.
+% In the left panel, large-activation points concentrate in the high-bloat regime dominated by token 0, while the remaining tokens occupy a much milder regime.
+% This means that the gradient norms of the sink token are not merely large in an absolute sense but are most strongly amplified in the attention branch.
+
+% The middle panel shows that $\mathrm{Compress}^{\mathrm{attn}}$ lies on an almost linear trend with slope $-1$, indicating that RMSNorm-mediated attenuation is closely aligned with activation scale.
+
+% The right panel explains why this alignment matters.
+% Although $\mathrm{Bloat}^{\mathrm{attn}}$ can become very large on the first token, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain concentrated near $\log_{10}1 = 0$, except for some points located in the lower-right corner from the first layer.
+% Thus the localized gradient pressure revealed by $\mathrm{Bloat}^{\mathrm{attn}}$ is largely reshaped into a regime compatible with stable residual propagation.
+% This observation is consistent with the broader literature, in which residual networks are thought to remain optimizable at depth as the signal propagation stays appropriately close to identity, rather than drifting into systematic explosion or collapse~\cite{he2016deep,zhang2019fixup,liu2020understanding,bachlechner2021rezero,wang2024deepnet}.
+
+% The empirical alignment between massive activations and strong compression is not accidental.
+% It follows from a basic property of RMSNorm.
+
+% \begin{theorem}[Activation-dependent compression under RMSNorm]\label{thm:rms_compress_main}
+% Denote $y=\mathrm{RMSNorm}(x) = \gamma \odot \frac{x}{\rms(x)}$ with $\rms(x)=\sqrt{\frac{1}{d}\|x\|_2^2+\epsilon}$, and let $g_y=\nabla_y\mathcal{L}$ be the upstream gradient at the RMSNorm output.
+% Then we have $\nabla_x\mathcal{L}=J_{\mathrm{rms}}(x)^\top g_y$, and the Jacobian satisfies $\|J_{\mathrm{rms}}(x)\|_{\mathrm{op}} \le \frac{\|\gamma\|_\infty}{\rms(x)}$.
+% \end{theorem}
+
+% The proof is deferred to Appendix~\ref{app:theory}.
+% The theorem formalizes a key intuition that larger incoming activation norm provides a direct route to stronger local attenuation of backpropagated gradients.
+
+% In total, we observe that localized gradients are not merely large but selectively processed by pre-norm computation.
+% In the attention branch, the sink token exhibits strong branch-local amplification, strong normalization-induced attenuation, and only limited net gradient change.
+% These results support the mechanism whereby massive activations attenuate localized gradient pressure through RMSNorm.
 
 \section{V-scale: a value-path gradient valve}
 \label{sec:vscale}
@@ -373,7 +515,6 @@ Moreover, because those small-norm tokens already contribute little through the 
 
 \begin{wrapfigure}[12]{r}{0.36\linewidth}
 	\centering
-	\vspace{-10px}
 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
 	\label{fig:architecture}
 \end{wrapfigure}
@@ -387,7 +528,7 @@ Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
 Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$, which has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$. Thus if $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated.
 
 \begin{remark}
-The gradient arriving at the token representation after RMSNorm is not a pure value-path quantity but the sum of the $Q$, $K$, and $V$ paths $\nabla_{\widetilde h_s^\ell}\mathcal{L} = W_Q^\top \nabla_{q_s^\ell}\mathcal{L} + W_K^\top \nabla_{k_s^\ell}\mathcal{L} + W_V^\top \nabla_{v_s^\ell}\mathcal{L}$.
+The gradient arriving at the token representation after RMSNorm is not purely a value-path quantity. As shown in~\eqref{eq:qkv_gradients}, it decomposes into query, key, and value contributions.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
 Our goal is to show that once the dominant value-path pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA.
 \end{remark}
@@ -474,12 +615,7 @@ These limitations are left for future work.
 \clearpage
 \appendix
 
-%\end{document}
-
-\iffalse
-\section{Quanming}
-
-\subsection{Difference}
+\section{Related work}
 
 \begin{table}[ht]
 	\centering
@@ -550,40 +686,6 @@ These limitations are left for future work.
 	\caption{Comparison with existing works on attention sinks, massive activations, and mitigation methods.}
 	\label{tab:related}
 \end{table}
-
-\subsection{Contributions}
-
-\begin{itemize}[leftmargin=*]
-	\item 
-	We identify gradient sinks as an explicit backward-pass mediator of extreme-token behavior in causal, pre-norm Transformers.
-	
-	\item
-	We reinterpret massive activations, within RMSNorm pre-norm models, as a local gradient-compression response to sink-induced pressure.
-	
-	\item
-	We propose V-scale, a lightweight value-path intervention that largely preserves attention sinks while reducing massive activations, providing a targeted causal test of the GS hypothesis.
-\end{itemize}
-
-\subsection{Organization}
-
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=1.0\linewidth]{pics/org}
-\end{figure}
-
-\subsection{Introduction}
-
-Transformer-based language models exhibit a striking and persistent behavior: a small number of tokens—most notably the first token—attract disproportionate attention from the rest of the sequence, while simultaneously developing unusually large activation magnitudes. These extreme-token phenomena, commonly referred to as attention sinks and massive activations, have been widely observed across model scales and architectures, and have significant implications for long-context modeling, numerical stability, and efficient deployment.
-
-Despite their prevalence, the origin of these phenomena remains poorly understood. Existing explanations largely focus on the forward computation, interpreting attention sinks as functional structures such as context anchors or no-op attention heads, and massive activations as representational artifacts or bias-like terms. However, these perspectives leave a fundamental question unanswered: \textbf{why does optimization consistently produce such coupled and extreme behaviors?} This question is particularly puzzling in modern pre-norm Transformers, where both attention and feed-forward layers operate on normalized representations. In such architectures, forward computation depends primarily on representation direction rather than magnitude, suggesting that large activation norms should play a limited role. Yet in practice, massive activations not only emerge but tightly co-occur with attention sinks throughout training. This apparent mismatch indicates that forward-pass explanations alone are insufficient.
-
-In this work, we revisit this problem from the perspective of training dynamics and uncover a previously overlooked mechanism. We show that attention sinks not only dominate the forward pass, but also induce concentrated gradient flow during backpropagation, forming what we term gradient sinks. Under causal masking, gradients from many tokens aggregate onto the sink token, creating localized gradient pressure that is highly asymmetric across token positions. We further demonstrate that, in pre-norm architectures, massive activations arise as an adaptive response to this imbalance: through normalization, larger activation norms attenuate backpropagated gradients, effectively reshaping the gradient flow to maintain stable optimization. This establishes a causal chain from forward attention structure to backward gradient concentration and activation growth.
-
-To validate this mechanism, we introduce V-scale, a lightweight modification that selectively regulates value-path gradients without altering attention weights. Empirically, V-scale preserves attention sinks while significantly suppressing massive activations, providing direct evidence that gradient sinks act as the mediator between the two phenomena. Taken together, our findings suggest that extreme-token behaviors in Transformers are not merely forward artifacts, but are governed by the structure of gradient flow during training, offering a novel lens for understanding and controlling optimization in large language models.
-
-\clearpage
-
-\fi
 
 \section{Model and training configuration}\label{app:config}
 
