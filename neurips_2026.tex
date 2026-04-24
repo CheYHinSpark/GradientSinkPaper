@@ -161,7 +161,7 @@ We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCa
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/1B_baseline/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/Qwen2__5_7B/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
@@ -202,12 +202,12 @@ so the observed token-wise concentration can be examined pathway by pathway. For
     \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dk_over_tokens.pdf}
     \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dv_over_tokens.pdf}
     \includegraphics[width=0.06\textwidth]{pics/01B_baseline/line_steps.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dq_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dk_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
-    \includegraphics[width=0.06\textwidth]{pics/03B_baseline/line_steps.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/1B_baseline/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/1B_baseline/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/1B_baseline/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.06\textwidth]{pics/1B_baseline/line_steps.pdf}
     \caption{
-    Token-wise gradient norms of QKV across training checkpoints. Top row: 0.1B model; bottom row: 0.3B model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. In both scales, key and especially value gradients exhibit a pronounced spike at token 0. % plan: 我计划只展示一个自己训练的模型的结果（是否1B的就好），如果后续还有空间，我计划放一个open Source model的，其余的放入Appendix
+    Token-wise gradient norms of QKV across training checkpoints. Top row: 0.1B model; bottom row: 1B model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. In both scales, key and especially value gradients exhibit a pronounced spike at token 0. % plan: 我计划只展示一个自己训练的模型的结果（是否1B的就好），如果后续还有空间，我计划放一个open Source model的，其余的放入Appendix
     }\label{fig:qkv_grads_over_tokens}
 \end{figure}
 
@@ -541,26 +541,26 @@ While evaluated at relatively modest scales, these results establish that interv
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.48\textwidth]{pics/01B_vscale_learn/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/03B_vscale_learn/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
+    \includegraphics[width=0.48\textwidth]{pics/03B_vscale/violin.pdf}
     \caption{
-    Gradient sink phenomenon in V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted while other early tokens share a common color. The median and IQR of $R_{GS}^{\ell}$ are also reported. Both scales show that gradient sinks remain present but are substantially weaker than the baselines, with the median token-0-to-rest ratio dropping to roughly $7.3$ and $6.3$ in the 0.1B and 0.3B V-scale models, respectively.
+    % Gradient sink phenomenon in V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted while other early tokens share a common color. The median and IQR of $R_{GS}^{\ell}$ are also reported. Both scales show that gradient sinks remain present but are substantially weaker than the baselines, with the median token-0-to-rest ratio dropping to roughly $7.3$ and $6.3$ in the 0.1B and 0.3B V-scale models, respectively.
     }\label{fig:vscale-gs}
 \end{figure}
 
 \begin{figure}[tb]
     \centering
-    % \includegraphics[width=0.24\linewidth]{pics/compare/01B_AS_mass_final_compare.pdf}
-    \includegraphics[width=0.24\linewidth]{pics/compare/01B_AS_eps_final_compare.pdf}
-    \includegraphics[width=0.24\linewidth]{pics/compare/01B_MA_x_out_final_compare.pdf}
-    \includegraphics[width=0.24\linewidth]{pics/compare/01B_MA_mlp_out_final_compare.pdf}
-    \includegraphics[width=0.24\linewidth]{pics/compare/01B_MA_attn_out_final_compare.pdf}
-    \\
     % \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_mass_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_eps_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_x_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_mlp_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_attn_out_final_compare.pdf}
+    \\
+    % \includegraphics[width=0.24\linewidth]{pics/compare/1B_AS_mass_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/1B_AS_eps_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_x_out_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_mlp_out_final_compare.pdf}
+    \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_attn_out_final_compare.pdf}
     \caption{
     Forward phenomena in baseline and V-scale models.
     Top row: 0.1B models; bottom row: 0.3B models.
@@ -738,6 +738,28 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
 
 \section{Additional empirical results}\label{app:empirical}
 
+\subsection{Supplementary results for QKV gradients}
+
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=0.3\textwidth]{pics/Llama_3__1_8B/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Llama_3__1_8B/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Llama_3__1_8B/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen2__5_7B/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen2__5_7B/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen2__5_7B/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen3_8B/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen3_8B/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/Qwen3_8B/LINE_Dv_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/GLM_4_9B/LINE_Dq_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/GLM_4_9B/LINE_Dk_over_tokens.pdf}
+    \includegraphics[width=0.3\textwidth]{pics/GLM_4_9B/LINE_Dv_over_tokens.pdf}
+    \caption{
+    Token-wise gradient norms of QKV across training checkpoints. Top row: 0.1B model; bottom row: 1B model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. In both scales, key and especially value gradients exhibit a pronounced spike at token 0. % plan: 我计划只展示一个自己训练的模型的结果（是否1B的就好），如果后续还有空间，我计划放一个open Source model的，其余的放入Appendix
+    }
+\end{figure}
+
 \subsection{Supplementary results for gradient reshaping}\label{app:mlp_reshaping}
 
 This subsection provides the gradient-reshaping measurements in Section~\ref{sec:pressure_reshape} for the MLP branch. 
@@ -771,13 +793,13 @@ Figure~\ref{fig:value_state_drain} reports the value-state norms in baseline mod
 
 \begin{figure}[tb]
     \centering
-    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/V_norm_compare.pdf}
-    \includegraphics[width=0.06\linewidth]{pics/01B_baseline/extreme_steps.pdf}
     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/V_norm_compare.pdf}
     \includegraphics[width=0.06\linewidth]{pics/03B_baseline/extreme_steps.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/V_norm_compare.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/1B_baseline/extreme_steps.pdf}
     \caption{
     Value state norms in baseline models.
-    Left: 0.1B model; right: 0.3B model.
+    Left: 0.3B model; right: 1B model.
     The ``early rest'' tokens refer to positions 1--15.
     Sink tokens tend to have relatively small value norms compared with the other early tokens.
     }\label{fig:value_state_drain}
@@ -785,15 +807,15 @@ Figure~\ref{fig:value_state_drain} reports the value-state norms in baseline mod
 
 \subsection{Validation losses}
 
-Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale models, verifying that the proposed modification remains trainable and reaches comparable optimization quality.
+% Figure~\ref{fig:validation_loss} shows validation losses of baseline and V-scale models, verifying that the proposed modification remains trainable and reaches comparable optimization quality.
 
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.5\linewidth]{pics/compare/loss_comparison.pdf}
-    \caption{
-    Validation losses of baseline and V-scale models.
-    }\label{fig:validation_loss}
-\end{figure}
+% \begin{figure}[tb]
+%     \centering
+%     \includegraphics[width=0.5\linewidth]{pics/compare/loss_comparison.pdf}
+%     \caption{
+%     Validation losses of baseline and V-scale models.
+%     }\label{fig:validation_loss}
+% \end{figure}
 
 \subsection{Downstream tasks}
 
