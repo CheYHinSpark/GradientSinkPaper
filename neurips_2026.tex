@@ -133,7 +133,7 @@ We also measure branch outputs $\|r_t^{\mathrm{attn},\ell}\|_2$ and $\|r_t^{\mat
 With notations above, this section traces how forward sink structure reappears in backpropagation.
 We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on C4~\cite{raffel2020exploring} dataset at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}. % plan: 下面这句很怪，因为马上展示的Gradient不是这样聚合的。先注释掉不删除。Unless otherwise stated, token-wise statistics are averaged over evaluation batches, and attention-based quantities are additionally averaged over heads.
 
-\subsection{Gradient sinks are widespread and structured}
+\subsection{Gradient sinks are widespread and structured}\label{sec:gs}
 
 \begin{figure}[tb]
     \centering
@@ -191,40 +191,42 @@ Figure~\ref{fig:qkv_grads_over_tokens} reveals a clear and highly structured asy
 These observations sharpen the empirical picture. Gradient sinks have a structured pathway profile, and the excess at the first token is carried mainly by the key and especially value gradients.
 
 
-\subsection{Massive activations align with local gradient reshaping}
+\subsection{Massive activations align with local gradient reshaping}\label{sec:ma_grad_reshape}
 
-The previous subsection compared different tokens, and now it is natural to ask how the gradient on a fixed token is reshaped as it passes through the attention branch. In a pre-norm attention block, we have $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ and therefore $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path. We introduce three diagnostics that track where branch-local pressure is created, how strongly it is attenuated, and how much net change remains:
+Having identified gradient sinks at the first token, we next ask how this local signal is reshaped as it passes through the attention branch. In a pre-norm attention block, we have $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ and therefore $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path. We introduce three diagnostic measurements. $\mathrm{Bloat}$ locates branch-local amplification, $\mathrm{Change}$ measures the net residual-stream effect, and $\mathrm{Compress}$ tracks how much of the post-RMSNorm gradient is retained in the residual-stream contribution:
 \begin{equation}\label{eq:ratios_attn}
 \begin{aligned}
     \mathrm{Bloat}_t^{\mathrm{attn},\ell}
     &:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, \\
-    \mathrm{Compress}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2, \\
     \mathrm{Change}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2.
+    &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2, \\
+    \mathrm{Compress}_t^{\mathrm{attn},\ell}
+    &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2.
 \end{aligned}
 \end{equation}
-Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Change}_t^{\mathrm{mlp},\ell}$ for the MLP branch; those measurements are deferred to Appendix~\ref{app:mlp_reshaping}.
+Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Change}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$ for the MLP branch; those measurements are deferred to Appendix~\ref{app:mlp_reshaping}.
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea3_Bloat.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea1_compress.pdf}
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea4_Change.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Ea1_compress.pdf}
     \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}
     \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Ea3_Bloat.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Ea1_compress.pdf}
     \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Ea4_Change.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Ea1_compress.pdf}
     \includegraphics[width=0.06\linewidth]{pics/1B_baseline/scatter_group_steps.pdf}
     \caption{
-    Scatter plots relating local gradient reshaping to input activation norms of the Attention block. Top row: 0.1B model; bottom row: 1B model. From left to right, the panels show $\log_{10}\mathrm{Bloat}^{\mathrm{attn}}$, $\log_{10}\mathrm{Compress}^{\mathrm{attn}}$, and $\log_{10}\mathrm{Change}^{\mathrm{attn}}$ against $\log_{10}\|h_{\mathrm{in}}\|$. Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15). Large-activation points from token 0 populate the high-bloat regime, while the corresponding residual-level transport remains close to identity for most layers.
+    Scatter plots relating local gradient reshaping to input activation norms of the Attention block. Top row: 0.1B model; bottom row: 1B model. From left to right, the panels show $\mathrm{Bloat}^{\mathrm{attn}}$, $\mathrm{Change}^{\mathrm{attn}}$, and $\mathrm{Compress}^{\mathrm{attn}}$ against $\|h_{\mathrm{in}}\|$ in $\log_{10}$ scale. Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15). 
+    Large-activation points from token 0 populate the high-bloat regime, yet their residual-level transport remains close to identity for most layers. The $\mathrm{Compress}$ ratio indicates stronger attenuation at massive activation sites.
     }\label{fig:attn_scatter_main}
 \end{figure}
 
-Figure~\ref{fig:attn_scatter_main} shows a highly structured empirical pattern. The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much milder regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding}.
-The right panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of first-layer points. This means that the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The middle panels suggest why this remains possible. Larger activation norms are consistently associated with stronger $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
+Figure~\ref{fig:attn_scatter_main} shows a highly structured empirical pattern. The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding}.
+The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
+Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
 
-Taken together, these measurements show that the sink token is both where branch-local pressure is strongest and where activation scale is most tightly coupled to its attenuation. This pattern sets up the next question. Why should sink structure create such localized pressure in the first place, and why are large activations positioned to absorb it?
+Taken together, these ratio measurements provide the empirical fact that massive activations align with a gradient-reshaping pattern in which local amplification is significant, residual-level change remains controlled, and activation-dependent compression is strongest at the same large-activation sites of the sink token.
 
 \section{Theory of sink structure and gradient regulation}\label{sec:theory}
 
@@ -731,8 +733,8 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
         AdamW $\epsilon$ & 1e-8 & 1e-8 & 1e-8 \\
         weight decay & 0.1 & 0.1 & 0.1 \\
         gradient clipping norm & 1.0 & 1.0 & 1.0 \\
-        max learning rate & 5e-4 & 1e-3 & 1e-3 \\
-        min learning rate & 5e-5 & 1e-4 & 1e-4 \\
+        max learning rate & 2e-3 & 1e-3 & 1e-3 \\
+        min learning rate & 2e-4 & 1e-4 & 1e-4 \\
         \midrule
         \emph{Training} & & \\
         learning rate schedule & cosine decay & cosine decay & cosine decay \\
@@ -780,11 +782,11 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \newcommand{\gradrow}[2]{%
         \rotatebox[origin=l]{90}{ #1} &
         \includegraphics[width=0.162\textwidth]{pics/#2/Ea3_Bloat.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Ea4_Change.pdf} &
         \includegraphics[width=0.162\textwidth]{pics/#2/Ea1_compress.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Ea4_Change.pdf}
         \includegraphics[width=0.162\textwidth]{pics/#2/Em3_Bloat.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Em1_compress.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Em4_Change.pdf}
+        \includegraphics[width=0.162\textwidth]{pics/#2/Em4_Change.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Em1_compress.pdf}
         \\
     }
     \begin{tabular}{ccccccc}
@@ -794,32 +796,32 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
         \gradrow{GLM-4-9B}{GLM_4_9B}
     \end{tabular}
     \caption{
-    Token-wise gradient norms of QKV across training checkpoints. Top row: 0.1B model; bottom row: 1B model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. In both scales, key and especially value gradients exhibit a pronounced spike at token 0. 
+    Supplementary gradient-reshaping measurements for pretrained models. From left to right, each row shows attention-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$, followed by MLP-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$.
     }
 \end{figure}
 
 \subsection{Supplementary results for gradient reshaping}\label{app:mlp_reshaping}
 
-This subsection provides the gradient-reshaping measurements in Section~\ref{sec:pressure_reshape} for the MLP branch. 
+This subsection provides the gradient-reshaping measurements in Section~\ref{sec:ma_grad_reshape} for the MLP branch. 
 The left panel of Figure~\ref{fig:mlp_scatter_main} shows that $\mathrm{Bloat}^{\mathrm{mlp}}$ is much less dominated by token 0 than in the attention branch.
 Thus, the MLP branch does not appear to be the primary location where localized pressure is generated.
-By contrast, the middle panel again shows a tight alignment between activation norms and compression as observed in Attention blocks. The right panel also shows that $\mathrm{Change}^{\mathrm{mlp}}$ remains concentrated near $\log_{10}1=0$.
+By contrast, the middle panel also shows that $\mathrm{Change}^{\mathrm{mlp}}$ remains concentrated near $\log_{10}1=0$. The right panel again shows a tight alignment between activation norms and compression as observed in Attention blocks.
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em3_Bloat.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em1_compress.pdf}
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em4_Change.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em1_compress.pdf}
     \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}
     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em3_Bloat.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em1_compress.pdf}
     \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em4_Change.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em1_compress.pdf}
     \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
     \caption{
     Scatter plots relating gradient reshaping to input activation norms of MLP block. Top row: 0.1B model; bottom row: 0.3B model.
     From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, 
-    $\log_{10}\mathrm{Compress}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, and
-    $\log_{10}\mathrm{Change}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$.
+    $\log_{10}\mathrm{Change}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, and
+    $\log_{10}\mathrm{Compress}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$.
     Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
     Compared with the attention branch, token 0 is less dominant in MLP bloat, while compression again aligns tightly with activation scale and net change remains close to identity.
     }\label{fig:mlp_scatter_main}
@@ -1306,7 +1308,7 @@ The statement for $s=0$ was already established in Proposition~\ref{prop:q-exact
 
 \subsection{RMSNorm as a gradient-compression mechanism}\label{app:theory:rmsnorm}
 
-This subsection formalizes the mechanism used in Section~\ref{sec:pressure_reshape} to explain why large token norms can reduce backpropagated gradient magnitude in a pre-norm Transformer.
+This subsection formalizes the mechanism used in Section~\ref{sec:ma_grad_reshape} to explain why large token norms can reduce backpropagated gradient magnitude in a pre-norm Transformer.
 
 For $x \in \mathbb{R}^d$ and gain vector $\gamma \in \mathbb{R}^d$, define
 \[
@@ -1331,7 +1333,7 @@ Since $y = D(x/r)$, we have
 Then $\frac{\partial}{\partial x}\left(\frac{1}{r}\right) = -\frac{1}{r^2}\frac{\partial r}{\partial x} = -\frac{1}{r^3 d}x^\top$ gives the stated formula.
 \end{proof}
 
-Now we prove Theorem~\ref{thm:rms_compress_main} in Section~\ref{sec:pressure_reshape}.
+Now we prove Theorem~\ref{thm:rms_compress_main} in Section~\ref{sec:ma_grad_reshape}.
 
 \begin{proof}[Proof of Theorem~\ref{thm:rms_compress_main}]
 The chain rule gives $\nabla_x \mathcal{L} = J_{\mathrm{rms}}(x)^\top\nabla_y \mathcal{L}$. Proposition~\ref{prop:rms-jac-app} implies
