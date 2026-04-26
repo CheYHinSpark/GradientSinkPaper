@@ -222,7 +222,8 @@ Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Change}_
     }\label{fig:attn_scatter_main}
 \end{figure}
 
-Figure~\ref{fig:attn_scatter_main} shows a highly structured empirical pattern. The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding}.
+We compare each gradient-reshaping ratio with the corresponding input activation norm, where activation norms are averaged over evaluation batches. Figure~\ref{fig:attn_scatter_main} shows a highly structured pattern.
+The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding}.
 The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
 Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
 
@@ -230,7 +231,8 @@ Taken together, these ratio measurements provide the empirical fact that massive
 
 \section{Theory of sink structure and gradient regulation}\label{sec:theory}
 
-Section~\ref{sec:as_to_gs} established three empirical facts: gradient sinks are widespread, the asymmetry is strongest on the value and key pathways, and large activations align with a distinctive pattern of local gradient reshaping in pre-norm attention blocks. This section provides the theoretical account that ties these facts together. The mechanism has two parts. Attention sink structure creates a direct route for backward gradient aggregation, and RMSNorm creates a direct route for attenuating the resulting localized pressure. Together, these ingredients connect attention sinks, gradient sinks, and massive activations within one coherent training-time picture. Proofs are deferred to Appendix~\ref{app:theory}.
+We now explain the mechanism behind the empirical patterns above. 
+The theory has two linked steps: causal attention routes gradients backward through the same columns that carry forward attention mass, while RMSNorm makes local backward gain decrease with input activation norms. This section presents the main identities and bounds that connect attention sinks, gradient sinks, and massive activations, while full theory and proofs are deferred to Appendix~\ref{app:theory}.
 
 \subsection{Exact backward identities expose the route to aggregation}
 
