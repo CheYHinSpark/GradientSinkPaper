@@ -228,10 +228,6 @@ Thus, the residual-stream gradient norm usually does not change dramatically des
 
 Taken together, these ratio measurements provide the empirical fact that massive activations align with a gradient-reshaping pattern in which local amplification is significant, residual-level change remains controlled, and activation-dependent compression is strongest at the same large-activation sites of the sink token.
 
-\begin{remark}
-A dense temporal plot of AS, GS, and MA may be useful for visualization, but is not treated as the primary causal test. AS and MA emerge very early in training, and apparent lead-lag relations at this stage are sensitive to checkpoint spacing, minibatch variation, and the threshold used to declare an onset. Moreover, the AS-to-GS step is an instantaneous backward-routing consequence of the attention pattern at a fixed checkpoint, rather than a delayed phenomenon. We therefore rely on exact backward identities together with the sink-preserving V-scale intervention for causal evidence.
-\end{remark}
-
 \section{Theory of sink structure and gradient regulation}\label{sec:theory}
 
 We now explain the mechanism behind the empirical patterns above. 
@@ -370,7 +366,8 @@ We re-measure gradient sinks using the same definition as in Figure~\ref{fig:gs-
 
 Moreover, Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models at 0.3B and 1B on the most relevant token-wise forward observables for AS and MA, including thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate} and output norms at different sites. These statistics are averaged over a batch of 512 inputs with 2048 tokens.
 Across both model scales, V-scale preserves strong AS behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
-The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, this direct attenuation is modest in magnitude compared with the reduction in the learned MLP spikes. 
+The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, the MA reduction cannot be attributed solely to a local shrinkage of the attention output, since the much stronger effect appears in MLP outputs where V-scale has no direct forward scaling.
+
 Overall, these observations match the qualitative prediction of our mechanism. By providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs.
 
 \paragraph{Downstream performance}
@@ -405,9 +402,9 @@ We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\c
     \setlength\tabcolsep{1.8pt}
     \caption{
     Main multi-key Needle-in-a-Haystack result for 1B models.
-    Each cell reports the mean V-scale retrieval accuracy ($\%$) over five random seeds, with standard deviation in the subscript, followed by the absolute gain over the corresponding baseline in percentage points.
-    Native models are evaluated at 1024 and 2048 tokens; YaRN-extended models use extension factor $4$ and are evaluated up to 8192 tokens.
-    Higher values and positive gains indicate better retrieval and the 8192-token column is shaded as it is the longest and most improved setting.
+    The mean V-scale retrieval accuracy ($\%$) over $5$ random seeds with standard deviation in the subscript is reported, followed by the absolute gain over the corresponding baseline.
+    Native models are evaluated at 2048 tokens and YaRN-extended ones with extension factor $4$ are evaluated up to 8192 tokens.
+    The 8192-token column is shaded as it is the longest and most improved setting.
     }\label{tab:main_niah_multikey_1b}
     \begin{tabular}{lccc>{\columncolor[RGB]{223,239,255}}c}
         \toprule
