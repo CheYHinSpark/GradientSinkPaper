@@ -81,7 +81,7 @@ Existing explanations have largely approached this question from the forward pas
 
 The indirect forward role of MA motivates a perspective on the backward pass, which directly shapes the model during training. The RMSNorm Jacobian contains a scaling factor that is roughly inverse to the input activation norm, suggesting that large residual-stream norms can attenuate backpropagated gradients. The structure of attention then explains why the sink token may require unusually strong attenuation. Attention weights act as two-way routing coefficients. In an attention head under causal masking, when many later tokens attend to a sink token, their training signals are routed back to that token as well. This turns a forward attention imbalance into a backward concentration of gradients, which we call a \emph{gradient sink} (GS). In this view, MA can be understood as learned regulators that absorb sink-induced gradient pressure and help maintain stable residual-stream gradient transport, rather than direct causes of AS. This interpretation further predicts that relieving such pressure through an alternative attenuation route should reduce reliance on MA even while AS remains present.
 
-The remainder of the paper follows this mechanism from observation to intervention. We first establish gradient sinks as a widespread empirical pattern across Transformer models, and shows that massive activations align with local gradient reshaping inside pre-norm blocks. Then theoretical accounts show why sink structure creates localized gradient pressure and how RMSNorm makes activation scale a viable regulator. Finally, we test the prediction with \emph{V-scale}, a modification that applies radial scaling to value states before attention aggregation. Rather than directly intervening on query-key attention computation, V-scale selectively attenuates the dominant value-path gradients of the sink token. Across model sizes, V-scale largely preserves attention sink behavior while substantially suppressing massive activations, especially in the residual stream and MLP outputs. Moreover, V-scale models show better long-context retrieval performance, including under several post-training quantization settings.
+The remainder of the paper follows this mechanism from observation to intervention. We first establish gradient sinks as a widespread empirical pattern across Transformer models, and show that massive activations align with local gradient reshaping inside pre-norm blocks. Then theoretical accounts show why sink structure creates localized gradient pressure and how RMSNorm makes activation scale a viable regulator. Finally, we test the prediction with \emph{V-scale}, a modification that applies radial scaling to value states before attention aggregation. Rather than directly intervening on query-key attention computation, V-scale selectively attenuates the dominant value-path gradients of the sink token. Across model sizes, V-scale largely preserves attention sink behavior while substantially suppressing massive activations, especially in the residual stream and MLP outputs. Moreover, V-scale models show better long-context retrieval performance, including under several post-training quantization settings.
 
 Our contributions are thus threefold. First, we shift the explanation of attention sinks and massive activations to a backward-pass perspective by introducing gradient sinks as the missing training-time mechanism. Second, we show that in pre-norm RMSNorm Transformers, massive activations can be interpreted as learned regulators of localized gradient pressure. Third, we propose V-scale, a simple value-path intervention that tests this mechanism and improves long-context retrieval robustness.
 
@@ -280,17 +280,18 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \section{V-scale: a value-path gradient valve}
 \label{sec:vscale}
 
-The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. More practically, such an intervention would help improve robustness under quantization, as MA is empirically associated with inference fragility. % TODO: maybe reference
+The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. Such an intervention is also practically relevant because activation outliers are a major source of difficulty for quantized inference~\cite{xiao2023smoothquant,bondarenko2023quantizable}.
 This section implements this prediction.
 
 Several recent architectural variants mitigate extreme phenomena like MA and AS by changing the Softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
 While valuable, these changes significantly alter the forward geometry and therefore do not cleanly isolate and test the specific prediction of our hypothesis. 
 Here we instead seek a mathematically transparent modification that remains close to the original Llama-like model.
 
-The value path is the natural target channel for two reasons.
-First, our backward observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
-Second, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
-We observe the same pattern and are inspired by this useful structural prior: if sink values are already small, a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
+The value path is the natural target channel for several reasons.
+First, modifying only the value states leaves the query-key dot products and Softmax attention weights unchanged.
+Second, our backward observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
+Moreover, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
+We observe the same pattern, which provides a useful structural prior. Since sink values are already small, a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
 
 \subsection{Definition and design intuition}
 
@@ -304,9 +305,8 @@ For each attention head, after the standard value projection and before value ag
 \]
 where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as illustrated in Figure~\ref{fig:architecture}.
 
-\begin{wrapfigure}[12]{r}{0.36\linewidth}
+\begin{wrapfigure}[13]{r}{0.36\linewidth}
 	\centering
-	\vspace{-10px}
 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
 	\label{fig:architecture}
 \end{wrapfigure}
@@ -318,51 +318,46 @@ Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ whe
 This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
 
-In practice we use a scaled reparameterization as $C_{\ell,h} = d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the standard deviation employed for initializing the weight matrix in \texttt{LlamaForCausalLM} baselines and $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
-% 为什么这样初始化
-This learnable version introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. We implement this learnable version in this work.
+In practice we use a scaled reparameterization $C_{\ell,h}=d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2$. The factor $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
+This learnable version introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. We use the learnable version in this work.
 
-As expected, the backward behavior of V-scale is analyzable.
+The backward behavior of V-scale is explicit.
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
-Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$, which has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$. Thus if $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated.
+Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$, which has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$. Thus if $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated. Full derivations are given in Appendix~\ref{app:theory:vscale}.
 
 \begin{remark}
 The gradient arriving at the token representation after RMSNorm is not purely a value-path quantity. As shown in~\eqref{eq:qkv_gradients}, it decomposes into query, key, and value contributions.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-Our goal is to show that once the dominant value-path pressure is supplied with an alternative valve, the optimizer no longer needs to build the same degree of MA.
+Our goal is to show the prediction by providing an alternative gradient valve.
 \end{remark}
 
 \subsection{Experiments}
 
-We train V-scale models using the same data, optimizer, and model configurations as the corresponding baselines. These models can achieve slightly lower validation losses compared to the baselines. 
-While evaluated at relatively modest scales, these results establish that intervening on gradient sinks via V-scale does not disrupt the fundamental trainability of the architecture.
+We train V-scale models using the same data, optimizer, and model configurations as the corresponding baselines. We first verify the mechanism using token-wise gradient and activation measurements, and then evaluate models on downstream tasks.
 
 \begin{figure}[tb]
     \centering
     \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/03B_vscale/violin.pdf}
     \caption{
-    % Gradient sink phenomenon in V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted while other early tokens share a common color. The median and IQR of $R_{GS}^{\ell}$ are also reported. Both scales show that gradient sinks remain present but are substantially weaker than the baselines, with the median token-0-to-rest ratio dropping to roughly $7.3$ and $6.3$ in the 0.1B and 0.3B V-scale models, respectively.
+    Gradient sinks in the 0.3B baseline and V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. V-scale still leaves a visible gradient sink but reduces the token-0 concentration relative to the baseline, consistent with a partial value-path intervention.
     }\label{fig:vscale-gs}
 \end{figure}
 
 \begin{figure}[tb]
     \centering
-    % \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_mass_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_AS_eps_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_x_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_mlp_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/03B_MA_attn_out_final_compare.pdf}
     \\
-    % \includegraphics[width=0.24\linewidth]{pics/compare/1B_AS_mass_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_AS_eps_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_x_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_mlp_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_attn_out_final_compare.pdf}
     \caption{
     Forward phenomena in baseline and V-scale models.
-    Top row: 0.1B models; bottom row: 0.3B models.
-    % From left to right: attention sink mass, thresholded sink rate, residual-stream output norm, and MLP output norm.
+    Top row: 0.3B models; bottom row: 1B models.
     From left to right: thresholded sink rate, residual-stream output norm, MLP output norm, and Attention output norm.
     We compare the first token with the mean over the rest early tokens (positions 1--15).
     Across both scales, V-scale largely preserves sink behavior while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs.
@@ -370,27 +365,21 @@ While evaluated at relatively modest scales, these results establish that interv
 \end{figure}
 
 \paragraph{Mechanism verification}
-We re-measure gradient sinks using the same definition as in Figure~\ref{fig:gs-definition}. Figure~\ref{fig:vscale-gs} shows that the gradient sink remains clearly present but is substantially weaker. In our measurements, the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} drops from the baseline values ($14.8$ and $9.0$) to roughly $7.3$ and $6.3$ in the 0.1B and 0.3B V-scale models, respectively. This is exactly the expected outcome of a partial intervention on the value-path gradient.
+We re-measure gradient sinks using the same definition as in Figure~\ref{fig:gs-definition}. Figure~\ref{fig:vscale-gs} shows that in 0.3B V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$. This is the expected outcome of a partial intervention on the value-path gradient.
 
-Moreover Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models on the most relevant token-wise forward observables for AS and MA: thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in \eqref{eq:sink_rate}, residual-stream output norm, MLP output norm, and Attention output norm.
+Moreover, Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models at 0.3B and 1B on the most relevant token-wise forward observables for AS and MA, including thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate}, residual-stream output norm, MLP output norm, and Attention output norm. These statistics are averaged over a batch of 512 input with 2048 tokens.
 
-The results are consistent across both model scales. On the AS metrics, V-scale preserves strong sink behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
+The results are consistent across both model scales. V-scale preserves strong AS behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
 The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, this direct attenuation is modest in magnitude compared with the reduction in the learned MLP spikes. 
-Overall, these observations match the qualitative prediction of our mechanism: by providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs, rather than merely shrinking the attention output.
+Overall, these observations match the qualitative prediction of our mechanism. By providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs.
 
 \paragraph{Downstream performance}
-To verify that the suppression of massive activations via V-scale does not compromise fundamental capabilities, we evaluate our 0.3B models on a suite of downstream tasks. We further assess robustness under post-training quantization (PTQ), since massive activations manifest as extreme outliers that are known to severely degrade quantized inference. We employ the LM Evaluation Harness~\cite{eval-harness} and compare models under standard \texttt{bfloat16} precision as well as five PTQ protocols spanning diverse design points: naive symmetric INT8 quantization (Naive W8A8)~\cite{gholami2021survey}, SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization.
+Beyond mechanism verification, we next examine how V-scale behaves on downstream evaluations.
+We evaluate the 1B baseline and V-scale models on standard language-modeling and reasoning tasks using the LM Evaluation Harness~\cite{eval-harness}.
+This provides a basic capability check that suppressing massive activations should not come at the cost of ordinary downstream behavior.
+Table~\ref{tab:main_standard_1b} shows that V-scale remains comparable to the baseline under \texttt{bfloat16}.
 
-Table~\ref{tab:quant_03b_main} reports language modeling perplexity and zero-shot reasoning accuracy. Under bfloat16 and all quantization settings, the V‑scale model performs on par with or even surpasses the baseline, confirming that substantially reducing activations does not compromise its representational capacity. 
-
-To further investigate the impact on long-range attention allocation, we conduct the Needle-in-a-Haystack (NIAH) retrieval test across context lengths from 512 to
-2048 tokens. Table~\ref{tab:quant_03b_niah} reports retrieval accuracy under bfloat16 and the same five PTQ protocols used above.
-Under full-precision bfloat16, V-scale slightly outperforms the baseline at the longest context (87.9\% vs. 82.5\%), indicating that
-suppressing massive activations does not impair the ability to route attention over long ranges.
-The advantage becomes substantially more pronounced under quantization. With the exception of naive W8A8, V-scale consistently outperforms the baseline across all other PTQ settings at context length 2048, with absolute gains ranging from +3.0\% (GPTQ) to +25.9\% (BitsAndBytes W4A16). 
-These results are consistent with the hypothesis that massive activations disproportionately harm quantized representations, particularly for longer contexts.
-
-\begin{table}[h]
+\begin{table}[t]
     \centering
     \caption{
     Representative standard downstream evaluation of 1B baseline and V-scale models under \texttt{bfloat16}.
@@ -408,7 +397,8 @@ These results are consistent with the hypothesis that massive activations dispro
     \end{tabular}
 \end{table}
 
-We further test a more diagnostic 1B multi-key NIAH setting, where multiple key-value associations must be maintained in context. Table~\ref{tab:main_niah_multikey_1b} reports the V-scale accuracy together with its absolute gain over the matched baseline. Accuracy and standard deviation are computed over five random seeds. V-scale improves every listed precision, quantization method, and context length, with the largest gains appearing in the YaRN-extended long-context regime.
+The further diagnostic is a multi-key Needle-in-a-Haystack (NIAH) task.
+We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization. Table~\ref{tab:main_niah_multikey_1b} reports the 1B V-scale retrieval accuracy together with its absolute gain over the matched baseline. Accuracy and standard deviation are computed over $5$ random seeds. V-scale shows positive gains in every listed precision, quantization method, and context length, with the largest gains appearing in the YaRN-extended 8192-token setting.
 
 \begin{table}[t]
     \centering
@@ -417,7 +407,7 @@ We further test a more diagnostic 1B multi-key NIAH setting, where multiple key-
     Main multi-key Needle-in-a-Haystack result for 1B models.
     Each cell reports the mean V-scale retrieval accuracy ($\%$) over five random seeds, with standard deviation in the subscript, followed by the absolute gain over the corresponding baseline in percentage points.
     Native models are evaluated at 1024 and 2048 tokens; YaRN-extended models use extension factor $4$ and are evaluated up to 8192 tokens.
-    Higher values and positive gains indicate better retrieval; the 8192-token column is shaded because it is the longest and most improved setting.
+    Higher values and positive gains indicate better retrieval and the 8192-token column is shaded as it is the longest and most improved setting.
     }\label{tab:main_niah_multikey_1b}
     \begin{tabular}{lccc>{\columncolor[RGB]{223,239,255}}c}
         \toprule
@@ -434,22 +424,22 @@ We further test a more diagnostic 1B multi-key NIAH setting, where multiple key-
     \end{tabular}
 \end{table}
 
-Taken together, these results demonstrate that the reduction in massive activations achieved by V-scale translates into concrete downstream robustness. The quantization-friendly activation profile preserves long-range retrieval fidelity, providing practical evidence that controlling gradient sinks yields more deployment-ready models.
+Taken together, these results show that V-scale can substantially suppress massive activations without obvious loss on standard 1B evaluations, while yielding clear gains on the long-context multi-key retrieval.
 
 \section{Conclusions}
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
 Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, attention sinks can induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized pressure in pre-norm Transformers.
 To test this hypothesis, we introduce V-scale, a value-path intervention that selectively modulates backpropagated gradients.
-Across models, we find that V-scale preserves attention sinks but suppresses massive activations, illustrating that these two phenomena can be separated once gradient sinks are controlled.
-Across model sizes, V-scale preserves attention sinks but suppresses massive activations, showing that AS and MA can be separated once GS is controlled. Robustness under quantization is also improved.
+Across model sizes, we find that V-scale preserves attention sinks but suppresses massive activations, illustrating that AS and MA can be separated once gradient sinks are controlled.
+The downstream results are correspondingly conservative: V-scale remains comparable on standard evaluations and improves the long-context retrieval.
 
-Taken together, our findings suggest that some phenomena in large language models may not be best understood purely as forward functional structures but a reflection to how optimization adapts to architectural constraints in order to maintain stable gradient transport. We believe this gradient-regulation perspective may be useful for future designs of normalization, attention mechanisms, and training-time interventions that aim to preserve the benefits of sink structure while reducing its costs.
+Taken together, our findings suggest that some phenomena in large language models may not be best understood purely as forward functional structures, but also as reflections of how optimization adapts to architectural constraints in order to maintain stable gradient transport. We believe this gradient-regulation perspective may be useful for future designs of normalization, attention mechanisms, and training-time interventions that aim to preserve the benefits of sink structure while reducing its costs.
 
 \paragraph{Limitations}
 This work has some limitations.
 First, our study is restricted to Llama-like dense language models. It remains unclear whether and to what extent the same mechanism transfers to other settings, such as mixture-of-experts architectures or multimodal Transformers.
-Second, our analysis is primarily a mechanism study of why MA can be useful once GS exists, rather than a complete account of how AS and MA are learned throughout optimization.
+Second, our analysis does not exclude other factors, such as data distribution, optimizer, or numerical precision, from shaping AS and MA during training.
 These limitations are left for future work.
 
 \bibliographystyle{plain}
@@ -687,9 +677,9 @@ Figure~\ref{fig:value_state_drain} reports the value-state norms in baseline mod
 
 \subsection{Additional downstream tasks}\label{app:additional_downstream}
 
-This subsection reports additional downstream evaluations for the 1B models, complementing the 0.3B results in Section~\ref{sec:vscale}. We use the same comparison protocol: each baseline is paired with its V-scale counterpart, and each pair is evaluated in \texttt{bfloat16} and under post-training quantization. The goal of these measurements is not to claim that V-scale uniformly improves every benchmark, but to check whether suppressing massive activations preserves ordinary language-modeling and reasoning behavior while improving robustness in settings where activation outliers are especially costly.
+This subsection reports additional downstream evaluations for the 1B models, supplementing the compact summary in Section~\ref{sec:vscale}. We use the same comparison protocol: each baseline is paired with its V-scale counterpart, and each pair is evaluated in \texttt{bfloat16} and under post-training quantization. The goal of these measurements is not to claim that V-scale uniformly improves every benchmark, but to check whether suppressing massive activations preserves ordinary language-modeling and reasoning behavior across precision settings.
 
-Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive on standard short-context evaluations. Perplexities are nearly unchanged, and most accuracy columns move only modestly. V-scale improves ARC-C, BoolQ, COPA, and OpenBookQA under most precision settings, while PIQA and WinoGrande are slightly lower. Thus the main conclusion is conservative: the value-path intervention does not appear to buy long-context or quantization robustness by sacrificing basic downstream capability.
+Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive on standard short-context evaluations. Perplexities are nearly unchanged, and most accuracy columns move only modestly. V-scale improves ARC-C, BoolQ, COPA, and OpenBookQA under most precision settings, while PIQA and WinoGrande are slightly lower. Thus the main conclusion is conservative: the value-path intervention does not appear to buy long-context robustness by sacrificing basic downstream capability.
 
 \begin{table}[h]
     \centering
@@ -750,7 +740,7 @@ We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) varian
     The first block evaluates native-context 1B models, for which only 1024 and 2048 tokens are tested.
     Blank cells therefore indicate untested longer contexts rather than failed runs.
     The second block evaluates the same models after YaRN context extension with factor $4$, enabling 4096- and 8192-token tests.
-    This template is nearly saturated at shorter lengths, but V-scale gives consistently higher 8192-token accuracy after YaRN extension across \texttt{bfloat16}, SmoothQuant, BNB, GPTQ, and AWQ.
+    This template is nearly saturated at shorter lengths, but V-scale gives consistently higher accuracy at 8192 tokens after YaRN extension.
     }\label{tab:niah_single2_1b}
     \begin{tabular}{llcccc}
         \toprule
@@ -830,7 +820,7 @@ We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) varian
     This setting requires retrieving information when multiple key-value associations are present, making it more sensitive to long-context attention allocation than the saturated single-needle cases.
     Columns denote context length in tokens, and entries are mean accuracy percentages with standard deviations over five random seeds; higher is better.
     Native-context models are evaluated at 1024 and 2048 tokens, and YaRN-extended models with factor $4$ are evaluated up to 8192 tokens.
-    V-scale improves every listed precision/quantization and context-length combination, with especially large gains in the YaRN-extended 8192-token setting.
+    V-scale improves every listed precision/quantization and context-length combination, with especially large gains at 8192 tokens after YaRN extension.
     }\label{tab:niah_multikey1_1b}
     \begin{tabular}{llcccc}
         \toprule
