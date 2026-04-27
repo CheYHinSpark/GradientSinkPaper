@@ -228,6 +228,10 @@ Thus, the residual-stream gradient norm usually does not change dramatically des
 
 Taken together, these ratio measurements provide the empirical fact that massive activations align with a gradient-reshaping pattern in which local amplification is significant, residual-level change remains controlled, and activation-dependent compression is strongest at the same large-activation sites of the sink token.
 
+\begin{remark}
+A dense temporal plot of AS, GS, and MA may be useful for visualization, but is not treated as the primary causal test. AS and MA emerge very early in training, and apparent lead-lag relations at this stage are sensitive to checkpoint spacing, minibatch variation, and the threshold used to declare an onset. Moreover, the AS-to-GS step is an instantaneous backward-routing consequence of the attention pattern at a fixed checkpoint, rather than a delayed phenomenon. We therefore rely on exact backward identities together with the sink-preserving V-scale intervention for causal evidence.
+\end{remark}
+
 \section{Theory of sink structure and gradient regulation}\label{sec:theory}
 
 We now explain the mechanism behind the empirical patterns above. 
@@ -281,17 +285,15 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \label{sec:vscale}
 
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. Such an intervention is also practically relevant because activation outliers are a major source of difficulty for quantized inference~\cite{xiao2023smoothquant,bondarenko2023quantizable}.
-This section implements this prediction.
 
-Several recent architectural variants mitigate extreme phenomena like MA and AS by changing the Softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
+Several recent architectural variants mitigate AS or MA by changing the Softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
 While valuable, these changes significantly alter the forward geometry and therefore do not cleanly isolate and test the specific prediction of our hypothesis. 
-Here we instead seek a mathematically transparent modification that remains close to the original Llama-like model.
+Here we instead seek a mathematically transparent modification.
 
-The value path is the natural target channel for several reasons.
-First, modifying only the value states leaves the query-key dot products and Softmax attention weights unchanged.
-Second, our backward observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
-Moreover, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
-We observe the same pattern, which provides a useful structural prior. Since sink values are already small, a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
+The value path is the natural target channel for two reasons.
+First, our backward observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are times larger than key-path ones. 
+Second, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
+We observe the same pattern, which provides a useful structural prior. Since sink values are smaller, a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
 
 \subsection{Definition and design intuition}
 
@@ -318,8 +320,8 @@ Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ whe
 This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
 
-In practice we use a scaled reparameterization $C_{\ell,h}=d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2$. The factor $\lambda^{\ell,h}$ is either fixed to $1$ or learned as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$.
-This learnable version introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. We use the learnable version in this work.
+In practice we use a scaled reparameterization $C_{\ell,h}=d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized as $0$.
+This introduces only one parameter per layer and per head, which is negligible relative to the total parameter count.
 
 The backward behavior of V-scale is explicit.
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
@@ -328,7 +330,6 @@ Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r)
 \begin{remark}
 The gradient arriving at the token representation after RMSNorm is not purely a value-path quantity. As shown in~\eqref{eq:qkv_gradients}, it decomposes into query, key, and value contributions.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-Our goal is to show the prediction by providing an alternative gradient valve.
 \end{remark}
 
 \subsection{Experiments}
@@ -340,7 +341,7 @@ We train V-scale models using the same data, optimizer, and model configurations
     \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/03B_vscale/violin.pdf}
     \caption{
-    Gradient sinks in the 0.3B baseline and V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. V-scale still leaves a visible gradient sink but reduces the token-0 concentration relative to the baseline, consistent with a partial value-path intervention.
+    Gradient sinks in the 0.3B baseline and V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. V-scale still leaves a visible gradient sink but reduces the concentration relative to the baseline.
     }\label{fig:vscale-gs}
 \end{figure}
 
@@ -360,16 +361,15 @@ We train V-scale models using the same data, optimizer, and model configurations
     Top row: 0.3B models; bottom row: 1B models.
     From left to right: thresholded sink rate, residual-stream output norm, MLP output norm, and Attention output norm.
     We compare the first token with the mean over the rest early tokens (positions 1--15).
-    Across both scales, V-scale largely preserves sink behavior while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs.
+    Across both scales, V-scale largely preserves attention sinks while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs.
     }\label{fig:vscale_as_ma_compare}
 \end{figure}
 
 \paragraph{Mechanism verification}
 We re-measure gradient sinks using the same definition as in Figure~\ref{fig:gs-definition}. Figure~\ref{fig:vscale-gs} shows that in 0.3B V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$. This is the expected outcome of a partial intervention on the value-path gradient.
 
-Moreover, Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models at 0.3B and 1B on the most relevant token-wise forward observables for AS and MA, including thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate}, residual-stream output norm, MLP output norm, and Attention output norm. These statistics are averaged over a batch of 512 input with 2048 tokens.
-
-The results are consistent across both model scales. V-scale preserves strong AS behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
+Moreover, Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models at 0.3B and 1B on the most relevant token-wise forward observables for AS and MA, including thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate} and output norms at different sites. These statistics are averaged over a batch of 512 inputs with 2048 tokens.
+Across both model scales, V-scale preserves strong AS behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
 The attention output norms of token 0 are also reduced, which is expected since V-scale directly contracts the value path. However, this direct attenuation is modest in magnitude compared with the reduction in the learned MLP spikes. 
 Overall, these observations match the qualitative prediction of our mechanism. By providing an additional gradient valve on the dominant value path, V-scale reduces the pressure for the model to realize MA through large MLP outputs.
 
@@ -424,17 +424,15 @@ We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\c
     \end{tabular}
 \end{table}
 
-Taken together, these results show that V-scale can substantially suppress massive activations without obvious loss on standard 1B evaluations, while yielding clear gains on the long-context multi-key retrieval.
-
 \section{Conclusions}
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
-Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, attention sinks can induce concentrated gradient pressure on the sink token, forming gradient sinks, and massive activations emerge as an adaptive response to this localized pressure in pre-norm Transformers.
+Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, and MA emerges as an adaptive response to this localized pressure in pre-norm Transformers.
 To test this hypothesis, we introduce V-scale, a value-path intervention that selectively modulates backpropagated gradients.
-Across model sizes, we find that V-scale preserves attention sinks but suppresses massive activations, illustrating that AS and MA can be separated once gradient sinks are controlled.
-The downstream results are correspondingly conservative: V-scale remains comparable on standard evaluations and improves the long-context retrieval.
+Across model sizes, we find that V-scale preserves AS but substantially suppresses MA, illustrating that the two phenomena can be separated once gradient sinks are controlled.
+For the downstream performance, V-scale remains comparable on standard evaluations and improves the long-context retrieval.
 
-Taken together, our findings suggest that some phenomena in large language models may not be best understood purely as forward functional structures, but also as reflections of how optimization adapts to architectural constraints in order to maintain stable gradient transport. We believe this gradient-regulation perspective may be useful for future designs of normalization, attention mechanisms, and training-time interventions that aim to preserve the benefits of sink structure while reducing its costs.
+Our findings also suggest that some phenomena in LLMs may not be best understood purely as forward functional structures, but also as reflections of how optimization adapts to architectural constraints. We believe this gradient-regulation perspective may be useful for future designs of normalization, attention mechanisms, and training-time interventions that aim to preserve the benefits of sink structure while reducing its costs.
 
 \paragraph{Limitations}
 This work has some limitations.
@@ -448,7 +446,7 @@ These limitations are left for future work.
 \clearpage
 \appendix
 
-\section{Related work}
+\section{Related works}
 
 \begin{table}[ht]
 	\centering
@@ -533,9 +531,9 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
         Item & 0.1B runs & 0.3B runs & 1B runs \\
         \midrule
         \emph{Model} & & & \\
-        total parameters & $\sim$101M & $\sim$291M & $\sim$1.04B \\
+        total parameters & $\sim$101M & $\sim$304M & $\sim$1.04B \\
         vocab size & 50257 & 50257 & 50257 \\
-        hidden layers & 16 & 16 & 18 \\
+        hidden layers & 16 & 17 & 18 \\
         hidden size & 512 & 1024 & 2048 \\
         attention heads & 8 & 8 & 16 \\
         key/value heads & 8 & 4 & 8 \\
@@ -1259,51 +1257,51 @@ These results mean that V-scale introduces an additional value-path gradient val
 %\input{checklist.tex}
 
 
-\section{QM}
+% \section{QM}
 
-\subsection{Contributions}
+% \subsection{Contributions}
 
-\begin{itemize}[leftmargin=*]
-\item We introduce gradient sink as the missing training-time mediator between attention sinks and massive activations. The key conceptual shift is that attention is not only a forward value router, but also a backward gradient router: when many later tokens attend to a sink token, their gradients are also routed back to that token. This reframes massive activations not as the direct forward cause of attention sinks, but as RMSNorm-mediated gradient regulators that absorb sink-induced gradient pressure in pre-norm Transformers.
+% \begin{itemize}[leftmargin=*]
+% \item We introduce gradient sink as the missing training-time mediator between attention sinks and massive activations. The key conceptual shift is that attention is not only a forward value router, but also a backward gradient router: when many later tokens attend to a sink token, their gradients are also routed back to that token. This reframes massive activations not as the direct forward cause of attention sinks, but as RMSNorm-mediated gradient regulators that absorb sink-induced gradient pressure in pre-norm Transformers.
 
-\item We develop a mechanism-driven analysis pipeline and intervention. First, we use token-level gradient diagnostics to reveal where gradient pressure is created, compressed, and transported in the residual stream. Second, we provide exact backward identities and RMSNorm analysis to explain why attention sinks induce gradient sinks and why large activation norms can attenuate gradients. Third, we propose V-scale, a value-path gradient valve that leaves QK attention weights unchanged while selectively attenuating value-path gradients, making it a clean causal test of the mechanism.
+% \item We develop a mechanism-driven analysis pipeline and intervention. First, we use token-level gradient diagnostics to reveal where gradient pressure is created, compressed, and transported in the residual stream. Second, we provide exact backward identities and RMSNorm analysis to explain why attention sinks induce gradient sinks and why large activation norms can attenuate gradients. Third, we propose V-scale, a value-path gradient valve that leaves QK attention weights unchanged while selectively attenuating value-path gradients, making it a clean causal test of the mechanism.
 
-\item We show that gradient sinks are widespread across scratch-trained and pretrained Transformer models, with the strongest concentration appearing on the value and key pathways. V-scale weakens gradient sinks, preserves attention sinks, and substantially suppresses massive activations, especially in the residual stream and MLP outputs. It also maintains downstream performance and improves robustness in long-context retrieval and post-training quantization settings, supporting both the causal mechanism and its practical value.
-\end{itemize}
+% \item We show that gradient sinks are widespread across scratch-trained and pretrained Transformer models, with the strongest concentration appearing on the value and key pathways. V-scale weakens gradient sinks, preserves attention sinks, and substantially suppresses massive activations, especially in the residual stream and MLP outputs. It also maintains downstream performance and improves robustness in long-context retrieval and post-training quantization settings, supporting both the causal mechanism and its practical value.
+% \end{itemize}
 
-\subsection{why this explanation is unique and important?}
+% \subsection{why this explanation is unique and important?}
 
-This explanation is unique because it shifts the understanding of extreme-token phenomena from a forward-pass correlation to a training-time causal mechanism. Prior work largely treats massive activations as a cause or companion of attention sinks. In contrast, we identify gradient sinks as the missing mediator: attention sinks route not only values forward but also gradients backward, creating localized gradient pressure on sink tokens. Massive activations then become understandable as RMSNorm-mediated gradient regulators that attenuate this pressure. This view is important because it explains why large activation norms are learned even though pre-norm forward computation largely normalizes them away, and because it leads to a testable intervention: by relieving value-path gradient pressure with V-scale, we can suppress massive activations while preserving attention sinks. Thus, the proposed explanation is not only mechanistically distinct, but also practically useful for designing Transformer variants that retain sink benefits while reducing activation outliers.
+% This explanation is unique because it shifts the understanding of extreme-token phenomena from a forward-pass correlation to a training-time causal mechanism. Prior work largely treats massive activations as a cause or companion of attention sinks. In contrast, we identify gradient sinks as the missing mediator: attention sinks route not only values forward but also gradients backward, creating localized gradient pressure on sink tokens. Massive activations then become understandable as RMSNorm-mediated gradient regulators that attenuate this pressure. This view is important because it explains why large activation norms are learned even though pre-norm forward computation largely normalizes them away, and because it leads to a testable intervention: by relieving value-path gradient pressure with V-scale, we can suppress massive activations while preserving attention sinks. Thus, the proposed explanation is not only mechanistically distinct, but also practically useful for designing Transformer variants that retain sink benefits while reducing activation outliers.
 
-\subsection{New Intro}
+% \subsection{New Intro}
 
-\begin{enumerate}[leftmargin=*]
-	\item \textbf{Motivation / puzzle.} Attention sinks and massive activations are common and important, but it is unclear why training learns such large activation outliers, especially in pre-norm Transformers.
+% \begin{enumerate}[leftmargin=*]
+% 	\item \textbf{Motivation / puzzle.} Attention sinks and massive activations are common and important, but it is unclear why training learns such large activation outliers, especially in pre-norm Transformers.
 	
-	\item \textbf{Gap in prior work.} Existing studies mostly explain these phenomena from the forward pass, but do not fully explain the training-time mechanism behind their coupling.
+% 	\item \textbf{Gap in prior work.} Existing studies mostly explain these phenomena from the forward pass, but do not fully explain the training-time mechanism behind their coupling.
 	
-	\item \textbf{Core idea / hypothesis.} Attention sinks also collect backward gradients, forming \emph{gradient sinks}. Massive activations are then interpreted as learned responses that regulate this localized gradient pressure.
+% 	\item \textbf{Core idea / hypothesis.} Attention sinks also collect backward gradients, forming \emph{gradient sinks}. Massive activations are then interpreted as learned responses that regulate this localized gradient pressure.
 	
-	\item \textbf{Mechanism.} In pre-norm Transformers, RMSNorm attenuates gradients inversely with activation norm, so larger activations can act as gradient regulators.
+% 	\item \textbf{Mechanism.} In pre-norm Transformers, RMSNorm attenuates gradients inversely with activation norm, so larger activations can act as gradient regulators.
 	
-	\item \textbf{Testable intervention.} Introduce \emph{V-scale}, a value-path modification that reduces gradient-sink pressure without directly removing attention sinks.
+% 	\item \textbf{Testable intervention.} Introduce \emph{V-scale}, a value-path modification that reduces gradient-sink pressure without directly removing attention sinks.
 	
-	\item \textbf{Main evidence.} Show gradient sinks empirically, connect them theoretically to sink structure, and demonstrate that V-scale preserves attention sinks while reducing massive activations.
+% 	\item \textbf{Main evidence.} Show gradient sinks empirically, connect them theoretically to sink structure, and demonstrate that V-scale preserves attention sinks while reducing massive activations.
 	
-	\item \textbf{Practical significance.} Reducing massive activations also improves quantization robustness and long-context behavior.
+% 	\item \textbf{Practical significance.} Reducing massive activations also improves quantization robustness and long-context behavior.
 	
-	\item \textbf{Contribution summary.} Gradient sinks as mechanism, massive activations as learned gradient regulators, and V-scale as both validation and practical intervention.
-\end{enumerate}
+% 	\item \textbf{Contribution summary.} Gradient sinks as mechanism, massive activations as learned gradient regulators, and V-scale as both validation and practical intervention.
+% \end{enumerate}
 
 
-Modern Transformer language models exhibit a small number of extreme-token phenomena that are both striking and practically important. Among the most prominent are \emph{attention sinks}, where a few early tokens, often the first token, attract disproportionate attention mass, and \emph{massive activations}, where unusually large activation norms concentrate on a small set of tokens and features. These phenomena are not merely cosmetic: attention sinks have been exploited for long-context inference and KV-cache management, while massive activations create severe numerical outliers that complicate quantization and deployment. Their frequent co-occurrence therefore raises a central mechanistic question: \emph{why do Transformer models learn such extreme activation patterns in the first place?}
+% Modern Transformer language models exhibit a small number of extreme-token phenomena that are both striking and practically important. Among the most prominent are \emph{attention sinks}, where a few early tokens, often the first token, attract disproportionate attention mass, and \emph{massive activations}, where unusually large activation norms concentrate on a small set of tokens and features. These phenomena are not merely cosmetic: attention sinks have been exploited for long-context inference and KV-cache management, while massive activations create severe numerical outliers that complicate quantization and deployment. Their frequent co-occurrence therefore raises a central mechanistic question: \emph{why do Transformer models learn such extreme activation patterns in the first place?}
 
-Existing explanations have largely approached this question from the forward pass. Attention sinks are often understood as a structural consequence of causal attention and the Softmax normalization constraint, while massive activations are studied as correlated outliers that help shape or maintain sink behavior. Such studies clarify the functional role of extreme tokens during inference, and several architectural or post-training interventions have shown that attention sinks and activation spikes can be shifted or suppressed. However, these perspectives leave open a more basic optimization question. In modern pre-norm Transformers, both attention and MLP sublayers operate on normalized inputs, so local forward computation depends much more strongly on representation direction than on representation norm. From this perspective, very large token activations appear unnecessary, or even wasteful. A forward-pass explanation alone therefore does not fully explain why training repeatedly discovers them.
+% Existing explanations have largely approached this question from the forward pass. Attention sinks are often understood as a structural consequence of causal attention and the Softmax normalization constraint, while massive activations are studied as correlated outliers that help shape or maintain sink behavior. Such studies clarify the functional role of extreme tokens during inference, and several architectural or post-training interventions have shown that attention sinks and activation spikes can be shifted or suppressed. However, these perspectives leave open a more basic optimization question. In modern pre-norm Transformers, both attention and MLP sublayers operate on normalized inputs, so local forward computation depends much more strongly on representation direction than on representation norm. From this perspective, very large token activations appear unnecessary, or even wasteful. A forward-pass explanation alone therefore does not fully explain why training repeatedly discovers them.
 
-We argue that the missing piece lies in the \emph{backward pass}. Under causal masking, a token that becomes an attention sink is read by many later queries. As a result, it not only accumulates forward attention mass, but also receives backpropagated gradient contributions from many future positions. This creates a pronounced token-wise gradient imbalance, which we call a \emph{gradient sink}. In this view, attention sinks impose a localized optimization pressure on the sink token. The key mechanism is provided by RMSNorm in pre-norm Transformers: while it normalizes activations in the forward pass, its Jacobian attenuates gradients approximately in inverse proportion to the input activation norm. Consequently, increasing the activation norm of a token provides a direct way to reduce the magnitude of gradients propagated through that token. This suggests a different interpretation of massive activations: rather than being merely pathological outliers, they can act as \emph{learned gradient regulators} that help absorb sink-induced gradient pressure while maintaining stable residual-stream gradient transport.
+% We argue that the missing piece lies in the \emph{backward pass}. Under causal masking, a token that becomes an attention sink is read by many later queries. As a result, it not only accumulates forward attention mass, but also receives backpropagated gradient contributions from many future positions. This creates a pronounced token-wise gradient imbalance, which we call a \emph{gradient sink}. In this view, attention sinks impose a localized optimization pressure on the sink token. The key mechanism is provided by RMSNorm in pre-norm Transformers: while it normalizes activations in the forward pass, its Jacobian attenuates gradients approximately in inverse proportion to the input activation norm. Consequently, increasing the activation norm of a token provides a direct way to reduce the magnitude of gradients propagated through that token. This suggests a different interpretation of massive activations: rather than being merely pathological outliers, they can act as \emph{learned gradient regulators} that help absorb sink-induced gradient pressure while maintaining stable residual-stream gradient transport.
 
-This interpretation makes a concrete and testable prediction. If massive activations are primarily learned to regulate gradient-sink pressure, then weakening the relevant backward pressure should reduce massive activations even when attention sinks remain present. To test this prediction, we introduce \emph{V-scale}, a simple value-path modification for Transformer attention. V-scale applies a norm-dependent radial scaling to value states before attention aggregation. It leaves the query-key attention weights unchanged, and therefore does not directly remove attention sinks. Instead, it selectively attenuates the dominant value-path gradients associated with small-norm sink values, effectively providing a gradient valve for sink-token pressure. Empirically, we find that gradient sinks are robust across Llama-like models trained from scratch and several pretrained language models, and that their structure is especially pronounced in the value and key pathways. We further observe that massive activations align closely with RMSNorm-mediated gradient compression, supporting the view that activation spikes participate in gradient regulation rather than merely reflecting forward-pass anomalies.
+% This interpretation makes a concrete and testable prediction. If massive activations are primarily learned to regulate gradient-sink pressure, then weakening the relevant backward pressure should reduce massive activations even when attention sinks remain present. To test this prediction, we introduce \emph{V-scale}, a simple value-path modification for Transformer attention. V-scale applies a norm-dependent radial scaling to value states before attention aggregation. It leaves the query-key attention weights unchanged, and therefore does not directly remove attention sinks. Instead, it selectively attenuates the dominant value-path gradients associated with small-norm sink values, effectively providing a gradient valve for sink-token pressure. Empirically, we find that gradient sinks are robust across Llama-like models trained from scratch and several pretrained language models, and that their structure is especially pronounced in the value and key pathways. We further observe that massive activations align closely with RMSNorm-mediated gradient compression, supporting the view that activation spikes participate in gradient regulation rather than merely reflecting forward-pass anomalies.
 
-The V-scale intervention further supports this mechanism. Across model sizes, V-scale largely preserves attention sink behavior while substantially suppressing massive activations, especially in the residual stream and MLP outputs. This decoupling is difficult to explain if massive activations are simply the direct cause of attention sinks, but follows naturally if they are learned responses to gradient-sink pressure. Moreover, reducing activation outliers yields practical benefits: V-scale improves robustness under several post-training quantization settings and preserves long-context retrieval performance. Our contributions are thus threefold: we identify \emph{gradient sinks} as a training-time mechanism induced by attention sinks under causal masking; we show that \emph{massive activations can be understood as learned gradient regulators} in pre-norm RMSNorm Transformers; and we propose \emph{V-scale}, a lightweight intervention that weakens gradient-sink pressure, suppresses massive activations, preserves attention sinks, and improves robustness under quantized inference. Together, these results suggest that some prominent Transformer outliers are best understood not only as forward computational structures, but also as optimization-induced mechanisms for regulating gradient flow.
+% The V-scale intervention further supports this mechanism. Across model sizes, V-scale largely preserves attention sink behavior while substantially suppressing massive activations, especially in the residual stream and MLP outputs. This decoupling is difficult to explain if massive activations are simply the direct cause of attention sinks, but follows naturally if they are learned responses to gradient-sink pressure. Moreover, reducing activation outliers yields practical benefits: V-scale improves robustness under several post-training quantization settings and preserves long-context retrieval performance. Our contributions are thus threefold: we identify \emph{gradient sinks} as a training-time mechanism induced by attention sinks under causal masking; we show that \emph{massive activations can be understood as learned gradient regulators} in pre-norm RMSNorm Transformers; and we propose \emph{V-scale}, a lightweight intervention that weakens gradient-sink pressure, suppresses massive activations, preserves attention sinks, and improves robustness under quantized inference. Together, these results suggest that some prominent Transformer outliers are best understood not only as forward computational structures, but also as optimization-induced mechanisms for regulating gradient flow.
 
 \end{document}
