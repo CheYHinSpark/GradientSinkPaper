@@ -71,7 +71,7 @@ This interpretation predicts that attenuating sink-induced gradients should weak
 \section{Introduction}
 
 Two prominent and frequently co-occurring phenomena in Transformer-based large language models (LLMs) are \emph{attention sinks} (AS), where a small number of tokens attract disproportionate attention mass~\cite{xiao2024streamingllm,gu2025when}, and \emph{massive activations} (MA), where activations become unusually large on a small set of tokens and features~\cite{bondarenko2023quantizable,sun2024massive,an2025systematic}. 
-These phenomena are predominantly observed at the first token and are of significant practical importance for long-context inference~\cite{xiao2024streamingllm,su2025kvsink}, fine-tuning~\cite{liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}, and quantization~\cite{xiao2023smoothquant,bondarenko2023quantizable}. Their frequent co-occurrence has also attracted mechanistic interest. AS is predominantly explained as a way to implement ``no-ops'' attention heads that contribute little to the current token~\cite{gu2025when,barbero2025why,guo2025activedormant}, driven by the sum-to-one constraint of the softmax operator. Yet one question remains unresolved:
+These phenomena are predominantly observed at the first token and are of significant practical importance for long-context inference~\cite{xiao2024streamingllm,su2025kvsink}, fine-tuning~\cite{liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}, and quantization~\cite{xiao2023smoothquant,bondarenko2023quantizable}. Their frequent co-occurrence has also attracted mechanistic interest. AS is predominantly explained as a way to implement ``no-op'' attention heads that contribute little to the current token~\cite{gu2025when,barbero2025why,guo2025activedormant}, driven by the sum-to-one constraint of the softmax operator. Yet one question remains unresolved:
 
 \begin{center}
 \emph{Why should optimization learn such massive token activations at all?}
@@ -226,6 +226,8 @@ The left panels show that large-activation points, almost all from token 0, are 
 The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
 Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
 
+% 这里上下两端可以适当补充一下，让这一页更丰满。
+
 Taken together, these ratio measurements show empirically that MA aligns with a gradient-reshaping pattern in which local amplification is significant, residual-level change remains controlled, and activation-dependent compression is strongest at the same large-activation sites of the sink token.
 
 \section{Theory of sink structure and gradient regulation}\label{sec:theory}
@@ -247,7 +249,7 @@ The full key and query identities are given in Appendix~\ref{app:theory:exact}, 
 
 \subsection{Sink statistics control localized gradient pressure}
 
-Recall from \eqref{eq:sink_mass} that, for the current head, $M_s=\sum_{t=s}^{T-1}a_{ts}$ is the attention mass routed through token $s$, and $S_s=\sum_{t=s}^{T-1}a_{ts}^2$ is the corresponding second moment. These two column statistics control the value-side gradient scale.
+Recall from~\eqref{eq:sink_mass} that, for the current head, $M_s=\sum_{t=s}^{T-1}a_{ts}$ is the attention mass routed through token $s$, and $S_s=\sum_{t=s}^{T-1}a_{ts}^2$ is the corresponding second moment. These two column statistics control the value-side gradient scale.
 
 \begin{theorem}[Value-path gradient control by sink statistics]\label{thm:v_second_moment_main}
 Suppose the upstream gradients on positions $t\ge s$ satisfy $g_t=\mu+\varepsilon_t$, where $\mu\in\mathbb{R}^{d_{\mathrm{head}}}$ is a coherent component, and the noise component satisfies $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))\le\sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))|\le\rho$ for all $t\ne t'$. Then
@@ -443,8 +445,36 @@ These limitations are left for future work.
 \clearpage
 \appendix
 
-\section{Related works}
+\section{Related work}
+\label{app:related_work}
 
+\paragraph{Phenomena and utilization}
+Attention sinks (AS) refer to the tendency of Transformer-based LLMs to route disproportionate attention mass to a small set of early or otherwise uninformative tokens~\cite{xiao2024streamingllm,gu2025when}. Their practical importance was first made especially clear by StreamingLLM, which showed that preserving sink tokens in the KV cache enables stable streaming inference beyond the training context window~\cite{xiao2024streamingllm}. Subsequent work has used or analyzed sink tokens for KV-cache compression, long-context inference, context anchoring, prompt tuning, and fine-tuning robustness~\cite{su2025kvsink,liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}. 
+Massive activations (MA) are sparse but extremely large activation values that recur in LLMs and often appear at specific token positions or features~\cite{sun2024massive,an2025systematic}. They are closely related to activation outliers that dominate numerical ranges and complicate low-bit inference~\cite{dettmers2022gptint,bondarenko2023quantizable,xiao2023smoothquant}. 
+AS and MA are extreme-token phenomena whose functional role and training origin have become active mechanistic questions~\cite{guo2025activedormant,qiu2026unified}. Our work identifies gradient sinks as a missing backward-pass phenomenon.
+
+\paragraph{Mechanistic interpretations}
+The study of extreme-token phenomena has produced several complementary explanations. 
+One influential view interprets attention sinks as a way for attention heads to implement ``no-op'' behavior under the sum-to-one constraint of softmax attention. When a head has little useful information to mix into the current representation, it can place most of its attention on low-information tokens whose value vectors contribute little to the residual update~\cite{bondarenko2023quantizable,gu2025when}. 
+Other work argues that first-token attention can serve useful information-propagation roles, such as reducing over-mixing in deep Transformers~\cite{barbero2025why}. 
+Closely related work studies value-state drains, where sink tokens receive high attention but have unusually small value norms, and active-dormant head dynamics and value-state gating both emphasize this attention-value coupling~\cite{guo2025activedormant,bu2025valuestategated}. 
+Another line connects attention sinks to massive activations, compression valleys, and outlier-driven rescaling, explaining how extreme residual or activation structures can shape forward attention behavior~\cite{sun2024massive,kaul2025from,queipo-de-llano2026attention,sun2026spike,qiu2026unified}. 
+These accounts clarify why AS and MA often co-occur and why they can be useful or stable forward structures.
+Our work complements these explanations by treating attention sinks as sources of backward gradient concentration.
+
+\paragraph{Mitigation and intervention}
+Many studies regard attention sinks or activation outliers as harmful to LLMs and seek to mitigate them.
+One family changes the softmax mechanism itself, using clipped softmax, rectified alternatives, or related normalizers to reduce forced attention allocation and activation outliers~\cite{bondarenko2023quantizable,miller2023attention,kaul2025from,zuhri2025softpick}. 
+Another family introduces gates after the attention output or on the value states, giving heads an explicit route for suppressing no-op updates without relying on extreme attention logits~\cite{qiu2025gated,bu2025valuestategated}. 
+Recent work further studies the anatomy of AS and MA across architectures, showing that architectural choices can decouple the two phenomena~\cite{sun2026spike}. 
+Our proposed V-scale has a narrower purpose. It is designed as a mechanism test that keeps query-key attention scores unchanged while attenuating value-path gradient pressure, allowing us to ask whether MA can be suppressed while AS is largely preserved.
+
+\paragraph{Normalization and pre-norm Transformers}
+As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm,nguyen2019transformers}. 
+RMSNorm removes mean-centering while preserving re-scaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama}. 
+In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on normalized inputs, so very large residual-stream norms have a limited direct role in the forward branch computation. This naturally motivates us to ask how normalization shapes backward signal propagation during training.
+
+\iffalse
 \begin{table}[ht]
 	\centering
 	\small
@@ -514,15 +544,15 @@ These limitations are left for future work.
 	\caption{Comparison with existing works on attention sinks, massive activations, and mitigation methods.}
 	\label{tab:related}
 \end{table}
+\fi
 
 \section{Model and training configuration}\label{app:config}
 
-Table~\ref{tab:config} summarizes the training configurations used in our experiments.
-Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention. All training runs were implemented in PyTorch using NVIDIA A100 GPUs (80GB). During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}.
+Table~\ref{tab:config} summarizes the configurations for the scratch-trained baselines and their matched V-scale variants. Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention. All training runs were implemented in PyTorch using NVIDIA A100 GPUs (80GB). During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}. Weight decay is applied only to 2-D weight matrices. V-scale runs use the same data, optimizer, and schedule as their corresponding baselines.
 
-\begin{table}[h]
+\begin{table}[ht]
     \centering
-    \caption{Training configuration.}\label{tab:config}
+    \caption{Model and Training configuration.}\label{tab:config}
     \begin{tabular}{p{0.25\linewidth}p{0.15\linewidth}p{0.15\linewidth}p{0.15\linewidth}}
         \toprule
         Item & 0.1B runs & 0.3B runs & 1B runs \\
@@ -539,7 +569,7 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
         RMSNorm $\epsilon$ & 1e-5 & 1e-5 & 1e-5 \\
         RoPE base & 10000 & 10000 & 10000 \\
         \midrule
-        \emph{Optimizer} & & \\
+        \emph{Optimizer} & & & \\
         optimizer & AdamW & AdamW & AdamW \\
         AdamW $\beta_1$ & 0.9 & 0.9 & 0.9 \\
         AdamW $\beta_2$ & 0.95 & 0.95 & 0.95 \\
@@ -549,19 +579,18 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
         max learning rate & 2e-3 & 1e-3 & 1e-3 \\
         min learning rate & 2e-4 & 1e-4 & 1e-4 \\
         \midrule
-        \emph{Training} & & \\
+        \emph{Training} & & & \\
         learning rate schedule & cosine decay & cosine decay & cosine decay \\
         total steps & 20000 & 20000 & 25000 \\
         warmup steps & 1000 & 1000 & 1000 \\
         context length & 1024 & 2048 & 2048 \\
-        batch size & 512 & 512 & 512 \\
+        global batch size & 512 & 512 & 512 \\
         tokens per step & 0.52M & 1.05M & 1.05M \\
         total tokens & 10.49B & 20.97B & 26.21B \\
         training data & C4 & C4 & C4 \\
         \bottomrule
     \end{tabular}
 \end{table}
-
 
 \section{Additional empirical results}\label{app:empirical}
 
@@ -573,12 +602,14 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \setlength{\tabcolsep}{0pt}
     \newcommand{\gradrow}[2]{%
         \rotatebox[origin=l]{90}{\quad #1} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dq_over_tokens.pdf} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dk_over_tokens.pdf} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dv_over_tokens.pdf}
+        \includegraphics[width=0.25\textwidth]{pics/#2/LINE_Dq_over_tokens.pdf} &
+        \includegraphics[width=0.25\textwidth]{pics/#2/LINE_Dk_over_tokens.pdf} &
+        \includegraphics[width=0.25\textwidth]{pics/#2/LINE_Dv_over_tokens.pdf}
         \\
     }
     \begin{tabular}{cccc}
+        \gradrow{0.1B Baseline}{01B_baseline}
+        \gradrow{0.3B Baseline}{03B_baseline}
         \gradrow{Qwen2.5-7B}{Qwen2__5_7B}
         \gradrow{Qwen3-8B}{Qwen3_8B}
         \gradrow{Llama-3.1-8B}{Llama_3__1_8B}
@@ -586,30 +617,6 @@ Unless otherwise specified, all models are decoder-only Transformers with RMSNor
     \end{tabular}
     \caption{
     Token-wise QKV gradient norms for pretrained models. Each row corresponds to one model. From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers. Across models, key and especially value gradients exhibit a pronounced spike at token 0. 
-    }
-\end{figure}
-
-\begin{figure}[tb]
-    \centering
-    \setlength{\tabcolsep}{0pt}
-    \newcommand{\gradrow}[2]{%
-        \rotatebox[origin=l]{90}{ #1} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Ea3_Bloat.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Ea4_Change.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Ea1_compress.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Em3_Bloat.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Em4_Change.pdf} &
-        \includegraphics[width=0.162\textwidth]{pics/#2/Em1_compress.pdf}
-        \\
-    }
-    \begin{tabular}{ccccccc}
-        \gradrow{Qwen2.5-7B}{Qwen2__5_7B}
-        \gradrow{Qwen3-8B}{Qwen3_8B}
-        \gradrow{Llama-3.1-8B}{Llama_3__1_8B}
-        \gradrow{GLM-4-9B}{GLM_4_9B}
-    \end{tabular}
-    \caption{
-    Supplementary gradient-reshaping measurements for pretrained models. From left to right, each row shows attention-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$, followed by MLP-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$.
     }
 \end{figure}
 
@@ -638,6 +645,31 @@ By contrast, the middle panel shows that $\mathrm{Change}^{\mathrm{mlp}}$ remain
     Each point is colored by token group (token 0, token 1, tokens 2--3, tokens 4--7, and the rest early tokens 8--15).
     Compared with the attention branch, token 0 is less dominant in MLP bloat, while compression again aligns tightly with activation scale and net change remains close to identity.
     }\label{fig:mlp_scatter_main}
+\end{figure}
+
+\begin{figure}[tb]
+    \centering
+    \setlength{\tabcolsep}{0pt}
+    \newcommand{\gradrow}[2]{%
+        \rotatebox[origin=l]{90}{ #1} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Ea3_Bloat.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Ea4_Change.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Ea1_compress.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Em3_Bloat.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Em4_Change.pdf} &
+        \includegraphics[width=0.162\textwidth]{pics/#2/Em1_compress.pdf}
+        \\
+    }
+    \begin{tabular}{ccccccc}
+        \gradrow{0.3B Baseline}{03B_baseline}
+        \gradrow{Qwen2.5-7B}{Qwen2__5_7B}
+        \gradrow{Qwen3-8B}{Qwen3_8B}
+        \gradrow{Llama-3.1-8B}{Llama_3__1_8B}
+        \gradrow{GLM-4-9B}{GLM_4_9B}
+    \end{tabular}
+    \caption{
+    Supplementary gradient-reshaping measurements for 0.3B baseline and pretrained models. From left to right, each row shows attention-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$, followed by MLP-branch $\mathrm{Bloat}$, $\mathrm{Change}$, and $\mathrm{Compress}$.
+    }
 \end{figure}
 
 \subsection{Supporting observations for V-scale design}
@@ -1214,7 +1246,7 @@ yields the claim.
 
 \begin{proposition}[Exact gains of V-scale]\label{prop:vscale_main}
 Let $r=\|v\|_2^2$.
-Then the Jacobian in \eqref{eq:vscale_jac} has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$ itself.
+Then the Jacobian in~\eqref{eq:vscale_jac} has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$ itself.
 Moreover, $\max_{r\ge 0} \lambda_\parallel(r)={9}/{8}$, attained at $r=3C$.
 \end{proposition}
 
