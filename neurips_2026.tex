@@ -157,7 +157,8 @@ R_{GS}^{\ell}(s) :=
 \right),
 \end{equation}
 In this experiment we take $s=0$ and $T_e=31$.
-Gradients are first aggregated over the full batch exactly as in one optimization step and then converted to token-wise $l_2$ norms, making the comparison directly reflect the effective training signal seen by the optimizer.
+Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $l_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
+For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained checkpoints, we use a diagnostic batch of 512 packed sequences with context length 2048.
 
 Figure~\ref{fig:gs-definition} shows that the sink token consistently exhibits substantially larger gradients than other early tokens, with the reported medians of $R_{GS}^{\ell}(0)$ typically lying in the $10$--$100$ range, i.e., roughly one to two orders of magnitude above the early-token average.
 Gradient sinks therefore appear as a common empirical pattern during the training of Transformer language models.
@@ -225,8 +226,6 @@ We compare each gradient-reshaping ratio with the corresponding input activation
 The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding}.
 The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
 Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
-
-% 这里上下两端可以适当补充一下，让这一页更丰满。
 
 Taken together, these ratio measurements show empirically that MA aligns with a gradient-reshaping pattern in which local amplification is significant, residual-level change remains controlled, and activation-dependent compression is strongest at the same large-activation sites of the sink token.
 
