@@ -132,21 +132,22 @@ We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCa
 
 \subsection{Gradient sinks are widespread and structured}\label{sec:gs}
 
+We first make definitions to identify gradient-sink behavior.
 
-
-We measure token-wise gradients at the post-RMSNorm attention input and compare a candidate sink position $s$ against the other early positions up to a cutoff $T_e$, where $0 \le s \le T_e$. 
-\footnote{+qm+ give it as a formal definition.}
-Define the gradient-sink ratio $R_{GS}^{\ell}(s)$ as the gradient norm on token $s$ divided by the mean gradient norm over the remaining positions in $\{0,\dots,T_e\}$:
+\begin{definition}[Gradient sink]\label{def:gradient_sink}
+Fix a layer $\ell$, a candidate sink position $s$, and an early-token reference set $\{0,\dots,T_e\}$ where $0\le s\le T_e$.
+Let $\|\nabla_{\widetilde h_t^\ell}\mathcal L\|_2$ denote the token-wise gradient norm at the post-RMSNorm attention input. The gradient-sink ratio of token $s$ at layer $\ell$, relative to $\{0,\dots,T_e\}$, is defined as
 \begin{equation}\label{eq:gs_def}
 R_{GS}^{\ell}(s) :=
-\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2 / 
-\left(
-\nicefrac{1}{T_e} \sum\nolimits_{0 \le t \le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2
-\right),
+\|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2 /
+\left( \nicefrac{1}{T_e} \sum\nolimits_{0 \le t \le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2 \right).
 \end{equation}
-In this experiment we take $s=0$ and $T_e=31$.
+For a prescribed threshold $\tau>1$, token $s$ is called a $\tau$-gradient sink at layer $\ell$ if $R_{GS}^{\ell}(s;T_e)\ge \tau$.
+\end{definition}
+
+In this work, we primarily report the continuous ratio $R_{GS}^{\ell}(s;T_e)$ rather than fixing a universal threshold $\tau$, since the meaningful scale of gradient concentration can depend on model size, layer, and measurement protocol. In the experiments below, we take $s=0$ and $T_e=31$.
 Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
-For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained checkpoints, we use a diagnostic batch of 512 packed sequences with context length 2048.
+For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained models, we use a diagnostic batch of 512 packed sequences with context length 2048. Note that for pretrained models, these gradients should be interpreted as post-hoc diagnostic probes rather than the exact gradients from their official training runs.
 
 \begin{figure}[tb]
 	\centering
@@ -163,12 +164,6 @@ For scratch-trained baselines, we use the corresponding batch size and context l
 
 Figure~\ref{fig:gs-definition} shows that the sink token consistently exhibits substantially larger gradients than other early tokens, with the reported medians of $R_{GS}^{\ell}(0)$ typically lying in the $10$--$100$ range, i.e., roughly one to two orders of magnitude above the early-token average.
 Gradient sinks therefore appear as a common empirical pattern during the training of Transformer language models.
-
-\begin{remark}
-\footnote{+qm+ no need to be as remark.
-	}
-While the gradients collected from pretrained models are computed post hoc under unofficial training conditions, the robust presence of gradient sinks suggests that this phenomenon reflects an intrinsic structural property without strong sensitivity to particular hyperparameters.
-\end{remark}
 
 To understand how this concentration is structured inside the attention block, we further decompose the gradients into query, key, and value pathways and track their token-wise norms across training checkpoints. For each token $s$, the incoming gradient splits as
 \begin{equation}\label{eq:qkv_gradients}
@@ -377,7 +372,7 @@ We train V-scale models using the same data, optimizer, and model configurations
 \end{figure}
 
 \paragraph{Mechanism verification}
-We re-measure gradient sinks using the same definition as in Figure~\ref{fig:gs-definition}. Figure~\ref{fig:vscale-gs} shows that in the 0.3B V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$. This is the expected outcome of a partial intervention on the value-path gradient.
+We re-measure gradient sinks as defined in Definition~\ref{def:gradient_sink}. Figure~\ref{fig:vscale-gs} shows that in the 0.3B V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$. This is the expected outcome of a partial intervention on the value-path gradient.
 
 Moreover, Figure~\ref{fig:vscale_as_ma_compare} compares baseline and V-scale models at 0.3B and 1B on the most relevant token-wise forward observables for AS and MA, including thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate} and output norms at different sites. These statistics are averaged over a batch of 512 inputs with 2048 tokens.
 Across both model scales, V-scale preserves strong AS behavior and in several layers even slightly strengthens it. In contrast, on the MA metrics, the residual-stream and MLP output norms of token 0 are clearly reduced relative to the baselines. 
