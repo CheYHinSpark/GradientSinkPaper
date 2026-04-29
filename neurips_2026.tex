@@ -134,20 +134,11 @@ We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCa
 
 \subsection{Gradient sinks are widespread and structured}\label{sec:gs}
 
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/1B_baseline/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/Qwen2__5_7B/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
-    \includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
-    \caption{
-    Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and IQR of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, token 0 consistently exhibits the strongest gradient concentration. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
-    }\label{fig:gs-definition}
-\end{figure}
 
-We measure token-wise gradients at the post-RMSNorm attention input and compare a candidate sink position $s$ against the other early positions up to a cutoff $T_e$, where $0 \le s \le T_e$. Define the gradient-sink ratio $R_{GS}^{\ell}(s)$ as the gradient norm on token $s$ divided by the mean gradient norm over the remaining positions in $\{0,\dots,T_e\}$:
+
+We measure token-wise gradients at the post-RMSNorm attention input and compare a candidate sink position $s$ against the other early positions up to a cutoff $T_e$, where $0 \le s \le T_e$. 
+\footnote{+qm+ give it as a formal definition.}
+Define the gradient-sink ratio $R_{GS}^{\ell}(s)$ as the gradient norm on token $s$ divided by the mean gradient norm over the remaining positions in $\{0,\dots,T_e\}$:
 \begin{equation}\label{eq:gs_def}
 R_{GS}^{\ell}(s) :=
 \|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2 / 
@@ -159,10 +150,25 @@ In this experiment we take $s=0$ and $T_e=31$.
 Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
 For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained checkpoints, we use a diagnostic batch of 512 packed sequences with context length 2048.
 
+\begin{figure}[tb]
+	\centering
+	\includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
+	\includegraphics[width=0.48\textwidth]{pics/1B_baseline/violin.pdf}
+	\includegraphics[width=0.48\textwidth]{pics/Qwen2__5_7B/violin.pdf}
+	\includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
+	\includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
+	\includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
+	\caption{
+		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and IQR of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, token 0 consistently exhibits the strongest gradient concentration. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
+	}\label{fig:gs-definition}
+\end{figure}
+
 Figure~\ref{fig:gs-definition} shows that the sink token consistently exhibits substantially larger gradients than other early tokens, with the reported medians of $R_{GS}^{\ell}(0)$ typically lying in the $10$--$100$ range, i.e., roughly one to two orders of magnitude above the early-token average.
 Gradient sinks therefore appear as a common empirical pattern during the training of Transformer language models.
 
 \begin{remark}
+\footnote{+qm+ no need to be as remark.
+	}
 While the gradients collected from pretrained models are computed post hoc under unofficial training conditions, the robust presence of gradient sinks suggests that this phenomenon reflects an intrinsic structural property without strong sensitivity to particular hyperparameters.
 \end{remark}
 
@@ -193,16 +199,17 @@ These observations sharpen the empirical picture. Gradient sinks have a structur
 \subsection{Massive activations align with local gradient reshaping}\label{sec:ma_grad_reshape}
 
 Having identified gradient sinks at the first token, we next ask how this local signal is reshaped as it passes through the attention branch. In a pre-norm attention block, we have $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ and therefore $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path. We introduce three diagnostic measurements. $\mathrm{Bloat}$ locates branch-local amplification, $\mathrm{Change}$ measures the net residual-stream effect, and $\mathrm{Compress}$ tracks how much of the post-RMSNorm gradient is retained in the residual-stream contribution:
-\begin{equation}\label{eq:ratios_attn}
-\begin{aligned}
-    \mathrm{Bloat}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, \\
-    \mathrm{Change}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2, \\
-    \mathrm{Compress}_t^{\mathrm{attn},\ell}
-    &:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2.
-\end{aligned}
-\end{equation}
+\begin{align}
+\mathrm{Bloat}_t^{\mathrm{attn},\ell}
+&:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, 
+\notag \\
+\mathrm{Change}_t^{\mathrm{attn},\ell}
+&:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2, 
+\label{eq:ratios_attn}\\
+\mathrm{Compress}_t^{\mathrm{attn},\ell}
+&:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2.
+\notag
+\end{align}
 Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Change}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$ for the MLP branch; those measurements are deferred to Appendix~\ref{app:mlp_reshaping}.
 
 \begin{figure}[tb]
@@ -305,10 +312,13 @@ where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as i
 
 \begin{wrapfigure}[13]{r}{0.36\linewidth}
 	\centering
+	\vspace{-10px}
 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
+	\vspace{-5px}
 	\label{fig:architecture}
 \end{wrapfigure}
 
+\footnote{+qm+ the content in this paragraph is what need to be packaged as ``remark''.}
 This map is chosen to satisfy three design desiderata.
 First, it does not affect the attention weights that depend only on $Q$ and $K$.
 Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1$ as $r\to\infty$.
@@ -316,14 +326,17 @@ Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ whe
 This makes V-scale a targeted modification rather than a uniform shrinkage.
 Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
 
-In practice we use a scaled reparameterization $C_{\ell,h}=d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}}d_{\mathrm{head}}\sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized to $0$.
+In practice we use a scaled reparameterization $C_{\ell,h} = d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized to $0$.
 This introduces only one parameter per layer and per head, which is negligible relative to the total parameter count.
 
+\footnote{+qm+ is it better to package conclusion here as a proposition?
+	\label{ft:1}}
 The backward behavior of V-scale is explicit.
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
 Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$, which has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$. Thus if $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated. Full derivations are given in Appendix~\ref{app:theory:vscale}.
 
 \begin{remark}
+\footnote{+qm+ check footnote~\ref{ft:1}.}
 The gradient arriving at the token representation after RMSNorm is not purely a value-path quantity. As shown in~\eqref{eq:qkv_gradients}, it decomposes into query, key, and value contributions.
 Therefore, modifying only the value path cannot completely eliminate gradient sinks.
 \end{remark}
@@ -336,6 +349,8 @@ We train V-scale models using the same data, optimizer, and model configurations
     \centering
     \includegraphics[width=0.48\textwidth]{pics/03B_baseline/violin.pdf}
     \includegraphics[width=0.48\textwidth]{pics/03B_vscale/violin.pdf}
+    
+    \vspace{-5px}
     \caption{
     Gradient sinks in the 0.3B baseline and V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. V-scale still leaves a visible gradient sink but reduces the concentration relative to the baseline.
     }\label{fig:vscale-gs}
@@ -352,6 +367,8 @@ We train V-scale models using the same data, optimizer, and model configurations
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_x_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_mlp_out_final_compare.pdf}
     \includegraphics[width=0.24\linewidth]{pics/compare/1B_MA_attn_out_final_compare.pdf}
+    
+    \vspace{-5px}
     \caption{
     Forward phenomena in baseline and V-scale models.
     Top row: 0.3B models; bottom row: 1B models.
@@ -544,103 +561,111 @@ In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on n
 \end{table}
 \fi
 
+\clearpage
+
 \section{Model and training configuration}\label{app:config}
 
-\begin{table}[t]
-    \centering
-    \caption{Model and training configuration.}\label{tab:config}
-    \begin{tabular}{p{0.25\linewidth}p{0.15\linewidth}p{0.15\linewidth}p{0.15\linewidth}}
-        \toprule
-        Item & 0.1B runs & 0.3B runs & 1B runs \\
-        \midrule
-        \emph{Model} & & & \\
-        total parameters & $\sim$101M & $\sim$304M & $\sim$1.04B \\
-        vocab size & 50257 & 50257 & 50257 \\
-        hidden layers & 16 & 17 & 18 \\
-        hidden size & 512 & 1024 & 2048 \\
-        attention heads & 8 & 8 & 16 \\
-        key/value heads & 8 & 4 & 8 \\
-        head dimensions & 64 & 128 & 128 \\
-        intermediate size & 1408 & 2816 & 5504 \\
-        RMSNorm $\epsilon$ & 1e-5 & 1e-5 & 1e-5 \\
-        RoPE base & 10000 & 10000 & 10000 \\
-        \midrule
-        \emph{Optimizer} & & & \\
-        optimizer & AdamW & AdamW & AdamW \\
-        AdamW $\beta_1$ & 0.9 & 0.9 & 0.9 \\
-        AdamW $\beta_2$ & 0.95 & 0.95 & 0.95 \\
-        AdamW $\epsilon$ & 1e-8 & 1e-8 & 1e-8 \\
-        weight decay & 0.1 & 0.1 & 0.1 \\
-        gradient clipping norm & 1.0 & 1.0 & 1.0 \\
-        max learning rate & 2e-3 & 1e-3 & 1e-3 \\
-        min learning rate & 2e-4 & 1e-4 & 1e-4 \\
-        \midrule
-        \emph{Training} & & & \\
-        learning rate schedule & cosine decay & cosine decay & cosine decay \\
-        total steps & 20000 & 20000 & 25000 \\
-        warmup steps & 1000 & 1000 & 1000 \\
-        context length & 1024 & 2048 & 2048 \\
-        global batch size & 512 & 512 & 512 \\
-        tokens per step & 0.52M & 1.05M & 1.05M \\
-        total tokens & 10.49B & 20.97B & 26.21B \\
-        training data & C4 & C4 & C4 \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+
 
 Table~\ref{tab:config} summarizes the configurations for the scratch-trained baselines and their matched V-scale variants. Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention. All training runs were implemented in PyTorch using NVIDIA A100 GPUs (80GB). During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}. Weight decay is applied only to 2-D weight matrices. V-scale runs use the same data, optimizer, and schedule as their corresponding baselines.
+
+\begin{table}[ht]
+	\centering
+	\caption{Model and training configuration.}\label{tab:config}
+	\begin{tabular}{p{0.25\linewidth}p{0.15\linewidth}p{0.15\linewidth}p{0.15\linewidth}}
+		\toprule
+		Item & 0.1B runs & 0.3B runs & 1B runs \\
+		\midrule
+		\emph{Model} & & & \\
+		total parameters & $\sim$101M & $\sim$304M & $\sim$1.04B \\
+		vocab size & 50257 & 50257 & 50257 \\
+		hidden layers & 16 & 17 & 18 \\
+		hidden size & 512 & 1024 & 2048 \\
+		attention heads & 8 & 8 & 16 \\
+		key/value heads & 8 & 4 & 8 \\
+		head dimensions & 64 & 128 & 128 \\
+		intermediate size & 1408 & 2816 & 5504 \\
+		RMSNorm $\epsilon$ & 1e-5 & 1e-5 & 1e-5 \\
+		RoPE base & 10000 & 10000 & 10000 \\
+		\midrule
+		\emph{Optimizer} & & & \\
+		optimizer & AdamW & AdamW & AdamW \\
+		AdamW $\beta_1$ & 0.9 & 0.9 & 0.9 \\
+		AdamW $\beta_2$ & 0.95 & 0.95 & 0.95 \\
+		AdamW $\epsilon$ & 1e-8 & 1e-8 & 1e-8 \\
+		weight decay & 0.1 & 0.1 & 0.1 \\
+		gradient clipping norm & 1.0 & 1.0 & 1.0 \\
+		max learning rate & 2e-3 & 1e-3 & 1e-3 \\
+		min learning rate & 2e-4 & 1e-4 & 1e-4 \\
+		\midrule
+		\emph{Training} & & & \\
+		learning rate schedule & cosine decay & cosine decay & cosine decay \\
+		total steps & 20000 & 20000 & 25000 \\
+		warmup steps & 1000 & 1000 & 1000 \\
+		context length & 1024 & 2048 & 2048 \\
+		global batch size & 512 & 512 & 512 \\
+		tokens per step & 0.52M & 1.05M & 1.05M \\
+		total tokens & 10.49B & 20.97B & 26.21B \\
+		training data & C4 & C4 & C4 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\clearpage
 
 \section{Additional empirical results}\label{app:empirical}
 
 \subsection{Supplementary results for QKV gradients}
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dq_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dk_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dv_over_tokens.pdf}
-    \includegraphics[width=0.06\textwidth]{pics/01B_baseline/line_steps.pdf}
 
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dq_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dk_over_tokens.pdf}
-    \includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
-    \includegraphics[width=0.06\textwidth]{pics/03B_baseline/line_steps.pdf}
-    \caption{
-    Token-wise QKV gradient norms across training checkpoints for smaller scratch-trained models, averaged over layers.
-    Top row: 0.1B model; bottom row: 0.3B model.
-    From left to right: query, key, and value gradient norms as functions of token position.
-    Both models reproduce the pathway asymmetry observed in the 1B model: key and especially value gradients exhibit a strong spike at token 0, while query gradients remain comparatively flat.
-    }\label{fig:qkv_grads_scratch}
-\end{figure}
-
-\begin{figure}[tb]
-    \centering
-    \setlength{\tabcolsep}{0pt}
-    \newcommand{\gradrow}[2]{%
-        \rotatebox[origin=l]{90}{\quad #1} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dq_over_tokens.pdf} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dk_over_tokens.pdf} &
-        \includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dv_over_tokens.pdf}
-        \\
-    }
-    \begin{tabular}{cccc}
-        \gradrow{Qwen2.5-7B}{Qwen2__5_7B}
-        \gradrow{Qwen3-8B}{Qwen3_8B}
-        \gradrow{Llama-3.1-8B}{Llama_3__1_8B}
-        \gradrow{GLM-4-9B}{GLM_4_9B}
-    \end{tabular}
-    \caption{
-    Token-wise gradient norms for pretrained LLMs.
-    Each row corresponds to one model.
-    From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers.
-    Across models, key and especially value gradients consistently exhibit a pronounced spike at token 0.
-    }\label{fig:qkv_grads_pretrained}
-\end{figure}
 
 This subsection supplements the QKV-path decomposition in Figure~\ref{fig:qkv_grads_over_tokens}.
 Figure~\ref{fig:qkv_grads_scratch} extends the diagnostic to smaller scratch-trained models, using the same layout as the 1B result in the main text.
 Figure~\ref{fig:qkv_grads_pretrained} reports the corresponding measurements for pretrained LLMs.
 Across these settings, the query pathway remains comparatively flat, whereas key and especially value gradients show a pronounced spike at token 0.
+
+\begin{figure}[ht]
+	\centering
+	\includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dq_over_tokens.pdf}
+	\includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dk_over_tokens.pdf}
+	\includegraphics[width=0.3\textwidth]{pics/01B_baseline/LINE_Dv_over_tokens.pdf}
+	\includegraphics[width=0.06\textwidth]{pics/01B_baseline/line_steps.pdf}
+	
+	\includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dq_over_tokens.pdf}
+	\includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dk_over_tokens.pdf}
+	\includegraphics[width=0.3\textwidth]{pics/03B_baseline/LINE_Dv_over_tokens.pdf}
+	\includegraphics[width=0.06\textwidth]{pics/03B_baseline/line_steps.pdf}
+	\caption{
+		Token-wise QKV gradient norms across training checkpoints for smaller scratch-trained models, averaged over layers.
+		Top row: 0.1B model; bottom row: 0.3B model.
+		From left to right: query, key, and value gradient norms as functions of token position.
+		Both models reproduce the pathway asymmetry observed in the 1B model: key and especially value gradients exhibit a strong spike at token 0, while query gradients remain comparatively flat.
+	}\label{fig:qkv_grads_scratch}
+\end{figure}
+
+\begin{figure}[ht]
+	\centering
+	\setlength{\tabcolsep}{0pt}
+	\newcommand{\gradrow}[2]{%
+		\rotatebox[origin=l]{90}{\quad #1} &
+		\includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dq_over_tokens.pdf} &
+		\includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dk_over_tokens.pdf} &
+		\includegraphics[width=0.3\textwidth]{pics/#2/LINE_Dv_over_tokens.pdf}
+		\\
+	}
+	\begin{tabular}{cccc}
+		\gradrow{Qwen2.5-7B}{Qwen2__5_7B}
+		\gradrow{Qwen3-8B}{Qwen3_8B}
+		\gradrow{Llama-3.1-8B}{Llama_3__1_8B}
+		\gradrow{GLM-4-9B}{GLM_4_9B}
+	\end{tabular}
+	\caption{
+		Token-wise gradient norms for pretrained LLMs.
+		Each row corresponds to one model.
+		From left to right: gradient norms of query, key, and value as functions of token position, averaged over layers.
+		Across models, key and especially value gradients consistently exhibit a pronounced spike at token 0.
+	}\label{fig:qkv_grads_pretrained}
+\end{figure}
 
 \subsection{Supplementary results for gradient reshaping}\label{app:mlp_reshaping}
 
@@ -759,7 +784,7 @@ We use the same comparison protocol, pairing each baseline with its V-scale coun
 
 Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive on standard evaluations. Perplexities are nearly unchanged, and most accuracy columns move only modestly. V-scale improves ARC-C, BoolQ, COPA, and OpenBookQA under most precision settings, while several other tasks decrease slightly. Thus the value-path intervention does not appear to sacrifice basic downstream capability.
 
-\begin{table}[h]
+\begin{table}[ht]
     \centering
     \caption{
     Standard downstream evaluation of 1B baseline and V-scale models under unquantized \texttt{bfloat16} and post-training quantization.
@@ -810,7 +835,7 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
 
 We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) variants. The native 1B models are evaluated up to 2048 tokens. To test longer contexts, we additionally apply YaRN with an extension factor of $4$ and evaluate up to 8192 tokens. Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b} report three templates of increasing difficulty. All NIAH entries are means and standard deviations over $5$ random seeds. The single-needle setting in Table~\ref{tab:niah_single2_1b} is close to saturated at short context lengths, but V-scale improves the longest 8192-token YaRN setting for every precision/quantization mode. The harder single-needle variant in Table~\ref{tab:niah_single3_1b} is more mixed. V-scale substantially improves the native 2048-token setting except under AWQ, while some YaRN-extended settings degrade. The clearest long-context benefit appears in the multi-key retrieval setting in Table~\ref{tab:niah_multikey1_1b}, where V-scale consistently outperforms the baseline across all listed context lengths and quantization methods.
 
-\begin{table}[h]
+\begin{table}[ht]
     \centering
     \caption{
     Needle-in-a-Haystack retrieval accuracy on the \texttt{niah\_single\_2} single-needle template for 1B models.
@@ -851,7 +876,7 @@ We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) varian
     \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[ht]
     \centering
     \caption{
     Needle-in-a-Haystack retrieval accuracy on the harder \texttt{niah\_single\_3} single-needle template for 1B models.
@@ -891,7 +916,7 @@ We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) varian
     \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[ht]
     \centering
     \caption{
     Needle-in-a-Haystack retrieval accuracy on the \texttt{niah\_multikey\_1} multi-key template for 1B models.
@@ -930,6 +955,8 @@ We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) varian
         \bottomrule
     \end{tabular}
 \end{table}
+
+\clearpage
 
 \section{Additional theoretical results and proofs}\label{app:theory}
 
