@@ -282,14 +282,11 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. Such an intervention is also practically relevant because activation outliers are a major source of difficulty for quantized inference~\cite{xiao2023smoothquant,bondarenko2023quantizable}.
 
-Several recent architectural variants mitigate AS or MA by changing the softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
-While valuable, these changes significantly alter the forward geometry and therefore do not cleanly isolate and test the specific prediction of our hypothesis. 
-Here we instead seek a mathematically transparent modification.
-
-The value path is the natural target channel for two reasons.
-First, our observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
-Second, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
-We observe the same pattern, which provides a useful structural prior. Since sink values are relatively small, a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
+The value path is the natural target channel for three reasons.
+First, modifying only value states does not affect the attention weights that depend only on $Q$ and $K$.
+Second, our observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
+Third, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
+We observe the same pattern, which provides a useful structural prior: a radial transform depending on $\|v\|_2$ can selectively target sink tokens.
 
 \subsection{Definition and design intuition}
 
@@ -305,34 +302,24 @@ where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as i
 
 \begin{wrapfigure}[13]{r}{0.36\linewidth}
 	\centering
-	\vspace{-10px}
+	\vspace{-0pt}
 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
-	\vspace{-5px}
 	\label{fig:architecture}
 \end{wrapfigure}
 
-\footnote{+qm+ the content in this paragraph is what need to be packaged as ``remark''.}
-This map is chosen to satisfy three design desiderata.
-First, it does not affect the attention weights that depend only on $Q$ and $K$.
-Second, it is close to identity when $\|v_j\|_2^2 \gg C$, because $\phi(r) \to 1$ as $r\to\infty$.
-Third, it strongly suppresses small-norm values, since $\phi(r) \approx r/C$ when $r\ll C$.
-This makes V-scale a targeted modification rather than a uniform shrinkage.
-Moreover, because those small-norm tokens already contribute little through the forward value sum, the induced forward perturbation is limited exactly in the regime where the gradient intervention is strongest.
+In practice we use a reparameterization $C_{\ell,h} = d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized to $0$. This introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. The backward behavior of V-scale is mathematically explicit:
 
-In practice we use a scaled reparameterization $C_{\ell,h} = d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical initialization-scale value norm. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized to $0$.
-This introduces only one parameter per layer and per head, which is negligible relative to the total parameter count.
+\begin{proposition}[Jacobian spectrum of V-scale]\label{prop:vscale_valve_main}
+Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=\frac{r}{r+C}$.
+Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$ with eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$ and $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$.
+\end{proposition}
 
-\footnote{+qm+ is it better to package conclusion here as a proposition?
-	\label{ft:1}}
-The backward behavior of V-scale is explicit.
-Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=r/(r+C)$.
-Then the Jacobian of the V-scale map $v\mapsto \hat v$ is $J_{\phi}(v) = \phi(r) I + \frac{2C}{(r+C)^2} vv^\top$, which has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$. Thus if $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated. Full derivations are given in Appendix~\ref{app:theory:vscale}.
+Full derivations are given in Appendix~\ref{app:theory:vscale}.
+Proposition~\ref{prop:vscale_valve_main} makes the backward effect of V-scale explicit. If $\|v\|_2^2\ll C$ for the sink token, the value-path backward signal is strongly attenuated. Conversely, both eigenvalues are close to $1$ when $\|v\|_2^2\gg C$, so V-scale nearly preserves gradient transmission on large-norm value states.
+On the forward side, because small-norm value states already contribute little to the forward value sum, this intervention is strongest where its forward perturbation is naturally limited. Thus V-scale is a targeted valve rather than a uniform shrinkage.
 
-\begin{remark}
-\footnote{+qm+ check footnote~\ref{ft:1}.}
-The gradient arriving at the token representation after RMSNorm is not purely a value-path quantity. As shown in~\eqref{eq:qkv_gradients}, it decomposes into query, key, and value contributions.
-Therefore, modifying only the value path cannot completely eliminate gradient sinks.
-\end{remark}
+Several recent architectural variants mitigate AS or MA by changing the softmax function, inserting gates, or modifying normalization structure~\cite{zuhri2025softpick,qiu2025gated,bu2025valuestategated,sun2026spike}.
+Unlike these broader architectural changes, V-scale is intended as a mechanism test that adds a transparent value-path gradient valve.
 
 \subsection{Experiments}
 
@@ -1309,7 +1296,7 @@ substituting
 yields the claim.
 \end{proof}
 
-\begin{proposition}[Exact gains of V-scale]\label{prop:vscale_main}
+\begin{proposition}[Jacobian spectrum of V-scale]\label{prop:vscale_main}
 Let $r=\|v\|_2^2$.
 Then the Jacobian in~\eqref{eq:vscale_jac} has eigenvalue $\lambda_\perp(r)=\frac{r}{r+C}$ on the $(d_{\mathrm{head}}-1)$-dimensional subspace orthogonal to $v$, and eigenvalue $\lambda_\parallel(r) = \frac{r^2+3Cr}{(r+C)^2}$ along the radial direction $v$ itself.
 Moreover, $\max_{r\ge 0} \lambda_\parallel(r)={9}/{8}$, attained at $r=3C$.
