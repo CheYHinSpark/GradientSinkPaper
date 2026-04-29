@@ -235,7 +235,14 @@ The theory has two linked steps: causal attention routes gradients backward thro
 
 \subsection{Exact backward identities expose the route to aggregation}
 
-Fix one layer and one attention head, and suppress their superscripts. Let $A=(a_{tj})\in\mathbb{R}^{T\times T}$ be the causal attention matrix, with $a_{tj}=0$ for $j>t$. Stack the value states and head outputs row-wise as $V,Y\in\mathbb{R}^{T\times d_{\mathrm{head}}}$, so that $Y=AV$. Let $G:=\nabla_Y\mathcal{L}$ be the upstream gradient at $Y$, and write its $t$-th row as $g_t:=\nabla_{y_t}\mathcal{L}$. We first record the exact value-path identity induced by attention aggregation.
+\begin{wrapfigure}[10]{r}{0.33\linewidth}
+	\centering
+    \vspace{-8pt}
+    \includegraphics[width=1\linewidth]{pics/as_motivation.pdf}\caption{Attention weights as two-way routers.}
+    \label{fig:as_motivation}
+\end{wrapfigure}
+
+Figure~\ref{fig:as_motivation} gives the basic intuition that attention weights route not only values forward but also value-path gradients backward. We now formalize this observation. Fix one layer and one attention head, and suppress their superscripts. Let $A=(a_{tj})\in\mathbb{R}^{T\times T}$ be the causal attention matrix, with $a_{tj}=0$ for $j>t$. Stack the value states and head outputs row-wise as $V,Y\in\mathbb{R}^{T\times d_{\mathrm{head}}}$, so that $Y=AV$. Let $G:=\nabla_Y\mathcal{L}$ be the upstream gradient at $Y$, and write its $t$-th row as $g_t:=\nabla_{y_t}\mathcal{L}$. We first record the exact value-path identity induced by attention aggregation.
 
 \begin{proposition}[Exact value-path aggregation]\label{prop:v_agg_main}
 For one attention head, the value-path backward signal satisfies $\nabla_V \mathcal{L} = A^\top G$, or equivalently $\nabla_{v_s}\mathcal{L} = \sum\nolimits_{t=s}^{T-1} a_{ts} g_t$ for any token index $s$.
