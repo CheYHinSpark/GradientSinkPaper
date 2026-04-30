@@ -125,10 +125,11 @@ In experiments, we focus on the first token ($s=0$).
 For token-wise activation analyses, we track activation norms at several computational sites, including the input of Transformer layers $\|h_{t,\mathrm{in}}^\ell\|=\|h_t^\ell\|_2$, the hidden states after attention $\|h_{t,\mathrm{half}}^\ell\|=\|h_t^{\ell+\nicefrac12}\|_2$, and the output of Transformer layers $\|h_{t,\mathrm{out}}^\ell\|=\|h_t^{\ell+1}\|_2$.
 We also measure branch outputs $\|r_t^{\mathrm{attn},\ell}\|_2$ and $\|r_t^{\mathrm{mlp},\ell}\|_2$, together with value-state norms $\|v_t^\ell\|_2$, when needed.
 
-\section{Empirical observations}\label{sec:as_to_gs}
+\section{Empirical Evidence}
+\label{sec:as_to_gs}
 
 This section establishes the empirical basis for viewing massive activations as gradient regulators.
-We analyze several open-source pretrained LLMs~\cite{qwen2.5,qwen3,grattafiori2024llama3herdmodels,glm2024chatglm}, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on the C4~\cite{raffel2020exploring} dataset at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}.
+We analyze typical open-source pretrained LLMs~\cite{qwen2.5,qwen3,grattafiori2024llama3herdmodels,glm2024chatglm}, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on the C4~\cite{raffel2020exploring} dataset at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}.
 
 \subsection{From attention sinks to gradient sinks}\label{sec:gs}
 
@@ -140,16 +141,12 @@ Let $\|\nabla_{\widetilde h_t^\ell}\mathcal L\|_2$ denote the token-wise gradien
 \begin{equation}\label{eq:gs_def}
 R_{GS}^{\ell}(s;T_e) :=
 \|\nabla_{\widetilde h_s^{\ell}} \mathcal{L}\|_2 /
-\left( \nicefrac{1}{T_e} \sum\nolimits_{0 \le t \le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2 \right).
+\big( \nicefrac{1}{T_e} \sum\nolimits_{0 \le t \le T_e, t\ne s} \|\nabla_{\widetilde h_t^{\ell}} \mathcal{L}\|_2 \big).
 \end{equation}
 For a prescribed threshold $\tau>1$, token $s$ is called a $\tau$-gradient sink at layer $\ell$ if $R_{GS}^{\ell}(s;T_e)\ge \tau$.
 \end{definition}
 
-In this work, we primarily report the continuous ratio $R_{GS}^{\ell}(s;T_e)$ rather than fixing a universal threshold $\tau$, since the meaningful scale of gradient concentration can depend on model size, layer, and measurement protocol. In the experiments below, we take $s=0$ and $T_e=31$.
-Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
-For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained models, we use a diagnostic batch of 512 packed sequences with context length 2048. Note that for pretrained models, these gradients should be interpreted as post-hoc diagnostic probes rather than the exact gradients from their official training runs.
-
-\begin{figure}[tb]
+\begin{figure}[t]
 	\centering
 	\includegraphics[width=0.48\textwidth]{pics/01B_baseline/violin.pdf}
 	\includegraphics[width=0.48\textwidth]{pics/1B_baseline/violin.pdf}
@@ -157,11 +154,17 @@ For scratch-trained baselines, we use the corresponding batch size and context l
 	\includegraphics[width=0.48\textwidth]{pics/Qwen3_8B/violin.pdf}
 	\includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
 	\includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
-
+	
 	\caption{
 		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, token 0 consistently exhibits the strongest gradient concentration. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
 	}\label{fig:gs-definition}
 \end{figure}
+
+In this work, we primarily report the continuous ratio $R_{GS}^{\ell}(s;T_e)$ rather than fixing a universal threshold $\tau$, since the meaningful scale of gradient concentration can depend on model size, layer, and measurement protocol. In the experiments below, we take $s=0$ and $T_e=31$.
+Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
+For scratch-trained baselines, we use the corresponding batch size and context length in Appendix~\ref{app:config}; for pretrained models, we use a diagnostic batch of 512 packed sequences with context length 2048. Note that for pretrained models, these gradients should be interpreted as post-hoc diagnostic probes rather than the exact gradients from their official training runs.
+
+
 
 Figure~\ref{fig:gs-definition} shows that the sink token consistently exhibits substantially larger gradients than other early tokens, with the reported medians of $R_{GS}^{\ell}(0)$ typically lying in the $10$--$100$ range, i.e., roughly one to two orders of magnitude above the early-token average.
 Gradient sinks therefore appear as a common empirical pattern during the training of Transformer language models.
@@ -233,7 +236,7 @@ This section explains the mechanism behind the empirical patterns above, making 
 
 \begin{wrapfigure}[9]{r}{0.3\linewidth}
 	\centering
-    \vspace{-10pt}
+    \vspace{-20pt}
     \includegraphics[width=1\linewidth]{pics/as_motivation.pdf}\caption{Attention weights as two-way routers.}
     \label{fig:as_motivation}
 \end{wrapfigure}
@@ -253,14 +256,13 @@ The full key and query identities are given in Appendix~\ref{app:theory:exact}, 
 We next quantify how much gradient pressure a sink token receives by relating value-path gradients to the attention-column mass $M_s=\sum_{t=s}^{T-1}a_{ts}$ and second moment $S_s=\sum_{t=s}^{T-1}a_{ts}^2$ defined in~\eqref{eq:sink_mass}.
 
 \begin{theorem}[Value-path gradient control by sink statistics]\label{thm:v_second_moment_main}
-Suppose the upstream gradients on positions $t\ge s$ satisfy $g_t=\mu+\varepsilon_t$, where $\mu\in\mathbb{R}^{d_{\mathrm{head}}}$ is a coherent component, and the noise component satisfies $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))\le\sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))|\le\rho$ for all $t\ne t'$. Then
-\[
-M_s^2\|\mu\|_2^2
+Suppose the upstream gradients on positions $t\ge s$ satisfy $g_t=\mu+\varepsilon_t$, where $\mu\in\mathbb{R}^{d_{\mathrm{head}}}$ is a coherent component, and the noise component satisfies $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))\le\sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))|\le\rho$ for all $t\ne t'$. 
+Then,
+$M_s^2\|\mu\|_2^2
 \le
 \mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
 \le
-M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s).
-\]
+M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s)$.
 \end{theorem}
 
 Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. The term $M_s^2\|\mu\|_2^2$ is the coherent accumulation along the sink column, while $S_s$ and $\rho(M_s^2-S_s)$ bound the accumulated variance and cross-token covariance. Thus a token with large attention-column mass receives a larger value-path training signal.
@@ -280,7 +282,7 @@ Theorem~\ref{thm:rms_compress_main} formalizes that a larger token-wise activati
 
 Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_second_moment_main}, attention sinks create localized value-path pressure, and RMSNorm makes activation scale an available local attenuation factor. Massive activations are therefore well positioned to emerge in response to sink-induced pressure, helping preserve stable residual-stream gradient transport by absorbing the pressure created by gradient sinks.
 
-\section{Intervention and application}
+\section{Practical Application}
 \label{sec:vscale}
 
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. Such an intervention is also practically relevant because activation outliers are a major source of difficulty for quantized inference~\cite{xiao2023smoothquant,bondarenko2023quantizable}.
