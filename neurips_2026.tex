@@ -128,7 +128,7 @@ We also measure branch outputs $\|r_t^{\mathrm{attn},\ell}\|_2$ and $\|r_t^{\mat
 \section{Empirical observations}\label{sec:as_to_gs}
 
 This section establishes the empirical basis for viewing massive activations as gradient regulators.
-We analyze several open-source pretrained LLMs, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on the C4~\cite{raffel2020exploring} dataset at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}.
+We analyze several open-source pretrained LLMs~\cite{qwen2.5,qwen3,grattafiori2024llama3herdmodels,glm2024chatglm}, together with \texttt{LlamaForCausalLM} baselines that we pretrain from scratch on the C4~\cite{raffel2020exploring} dataset at scales ranging from 0.1B to 1B parameters. Detailed model and training configurations are deferred to Appendix~\ref{app:config}.
 
 \subsection{From attention sinks to gradient sinks}\label{sec:gs}
 
@@ -468,7 +468,7 @@ Our proposed V-scale has a narrower purpose. It is designed as a mechanism test 
 
 \paragraph{Normalization and pre-norm Transformers}
 As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm,nguyen2019transformers}. 
-RMSNorm removes mean-centering while preserving rescaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama}.
+RMSNorm removes mean-centering while preserving rescaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama,grattafiori2024llama3herdmodels,qwen2.5,qwen3,glm2024chatglm}.
 In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on normalized inputs, so very large residual-stream norms have a limited direct role in the forward branch computation. This naturally motivates us to ask how normalization shapes backward signal propagation during training.
 
 \iffalse
