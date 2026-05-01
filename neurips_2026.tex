@@ -425,6 +425,7 @@ We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\c
 \end{table}
 
 \section{Conclusion}
+\label{sec:conclusion}
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
 Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, and MA emerges as an adaptive regulator to this localized pressure in pre-norm Transformers.
@@ -551,7 +552,7 @@ In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on n
 
 \section{Model and training configuration}\label{app:config}
 
-Table~\ref{tab:config} summarizes the configurations for the scratch-trained baselines and their matched V-scale variants. Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention. All training runs were implemented in PyTorch using NVIDIA A100 GPUs (80GB). During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}. Weight decay is applied only to 2-D weight matrices. V-scale runs use the same data, optimizer, and schedule as their corresponding baselines.
+Table~\ref{tab:config} summarizes the configurations for the scratch-trained baselines and their matched V-scale variants. Unless otherwise specified, all models are decoder-only Transformers with RMSNorm, RoPE positional encoding, SwiGLU feed-forward blocks, and causal self-attention. We use the same tokenizer as GPT-2~\cite{radford2019language}. All training runs were implemented in PyTorch using NVIDIA A100 GPUs (80GB). During preprocessing, documents are packed by inserting \texttt{<eos>} as the separator, without introducing dedicated \texttt{<bos>}. Weight decay is applied only to 2-D weight matrices. V-scale runs use the same data, optimizer, and schedule as their corresponding baselines.
 
 \begin{table}[ht]
 	\centering
@@ -1338,6 +1339,6 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 These results show that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
 
 \newpage
-%\input{checklist.tex}
+\input{checklist.tex}
 
 \end{document}
