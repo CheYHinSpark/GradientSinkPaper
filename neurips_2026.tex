@@ -1338,6 +1338,33 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 
 These results show that V-scale introduces an additional value-path gradient valve. In the regime where sink values have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
 
+\section{Licenses for existing assets}
+\label{app:license}
+
+Our experiments rely on several publicly available datasets, models, tokenizers, and evaluation or compression toolkits. We acknowledge the contributors and respect their licenses. The main existing assets are summarized in Table~\ref{tab:existing_assets_license}.
+
+\begin{table}[h]
+    \centering
+	\setlength\tabcolsep{4pt}
+    \caption{Main existing assets used in this work.}
+    \label{tab:existing_assets_license}
+    \begin{tabular}{lll}
+    \toprule
+    Asset & Usage in this work & License \\
+    \midrule
+    C4 & Pretraining data & ODC-BY \\
+    GPT-2 tokenizer & Tokenization & MIT License \\
+    Qwen2.5-7B & Diagnostic measurements & Apache License 2.0 \\
+    Qwen3-8B & Diagnostic measurements & Apache License 2.0 \\
+    Llama-3.1-8B & Diagnostic measurements & \href{https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/LICENSE}{Llama 3.1 Community License} \\
+    GLM-4-9B & Diagnostic measurements & \href{https://huggingface.co/zai-org/glm-4-9b/blob/main/LICENSE}{GLM-4-9B License} \\
+    LM Evaluation Harness v0.4.11 & Evaluation & MIT License \\
+    Bitsandbytes v0.49.0 & Quantization & MIT License \\
+    LLM Compressor v0.9.0 & Quantization & Apache License 2.0 \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
 \newpage
 \input{checklist.tex}
 
