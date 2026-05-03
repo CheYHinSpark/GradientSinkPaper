@@ -162,7 +162,7 @@ For a prescribed threshold $\tau>1$, token $s$ is called a $\tau$-gradient sink 
 	\includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
 	
 	\caption{
-		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, token 0 consistently exhibits the strongest gradient concentration. Models include 0.1B and 0.3B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
+		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, the first token consistently exhibits the strongest gradient concentration. Models include 0.1B and 1B baselines together with Qwen2.5--7B, Qwen3--8B, Llama-3.1--8B, and GLM-4--9B.
 	}\label{fig:gs-definition}
 \end{figure}
 
@@ -684,13 +684,13 @@ Qwen3-8B is somewhat less aligned with the other pretrained models, which may re
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em4_Change.pdf}
     \includegraphics[width=0.3\linewidth]{pics/01B_baseline/Em1_compress.pdf}
     \includegraphics[width=0.06\linewidth]{pics/01B_baseline/scatter_group_steps.pdf}\\
-    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em3_Bloat.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em4_Change.pdf}
-    \includegraphics[width=0.3\linewidth]{pics/03B_baseline/Em1_compress.pdf}
-    \includegraphics[width=0.06\linewidth]{pics/03B_baseline/scatter_group_steps.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Em3_Bloat.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Em4_Change.pdf}
+    \includegraphics[width=0.3\linewidth]{pics/1B_baseline/Em1_compress.pdf}
+    \includegraphics[width=0.06\linewidth]{pics/1B_baseline/scatter_group_steps.pdf}
 
     \caption{
-    Scatter plots relating gradient reshaping to input activation norms of the MLP block. Top row: 0.1B model; bottom row: 0.3B model.
+    Scatter plots relating gradient reshaping to input activation norms of the MLP block. Top row: 0.1B model; bottom row: 1B model.
     From left to right: $\log_{10}\mathrm{Bloat}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, 
     $\log_{10}\mathrm{Change}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$, and
     $\log_{10}\mathrm{Compress}^{\mathrm{mlp}}$ vs.\ $\log_{10}\|h_{\mathrm{half}}\|$.
@@ -836,7 +836,7 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
     \end{tabular}
 \end{table}
 
-We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) variants. The native 1B models are evaluated up to 2048 tokens. To test longer contexts, we additionally apply YaRN with an extension factor of $4$ and evaluate up to 8192 tokens. Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b} report three templates of increasing difficulty. All NIAH entries are means and standard deviations over $5$ random seeds. The single-needle setting in Table~\ref{tab:niah_single2_1b} is close to saturated at short context lengths, but V-scale improves the longest 8192-token YaRN setting for every precision/quantization mode. The harder single-needle variant in Table~\ref{tab:niah_single3_1b} is more mixed. V-scale substantially improves the native 2048-token setting except under AWQ, while some YaRN-extended settings degrade. The clearest long-context benefit appears in the multi-key retrieval setting in Table~\ref{tab:niah_multikey1_1b}, where V-scale consistently outperforms the baseline across all listed context lengths and quantization methods.
+We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) variants. The native 1B models are evaluated up to 2048 tokens. To test longer contexts, we additionally apply YaRN with an extension factor of $4$ and evaluate up to 8192 tokens. Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b} report three templates of increasing difficulty. All NIAH entries are means and standard deviations over $5$ random seeds. The single-needle setting in Table~\ref{tab:niah_single2_1b} is close to saturated at short context lengths, but V-scale improves the longest 8192-token YaRN setting for every precision/quantization mode. A harder single-needle variant in Table~\ref{tab:niah_single3_1b} is more mixed. V-scale substantially improves the native 2048-token setting except under AWQ, while some YaRN-extended settings degrade. The clearest long-context benefit appears in the multi-key retrieval setting in Table~\ref{tab:niah_multikey1_1b}, where V-scale consistently outperforms the baseline across all listed context lengths and quantization methods.
 
 \begin{table}[ht]
     \centering
@@ -1120,7 +1120,7 @@ Combining these bounds proves the theorem.
 \end{proof}
 
 \begin{corollary}[Deterministic value-side upper bounds]\label{cor:v-deterministic-app}
-For any realization of $\{g_t\}_{t=s}^{T-1}$,
+For any realization of $\{g_t\}_{t=s}^{T-1}$, we have
 \[
     \|\nabla_{v_s} \mathcal{L}\|_2 \le \sum\nolimits_{t=s}^{T-1} a_{ts}\|g_t\|_2 \le M_s \max_{t\ge s} \|g_t\|_2,
 \]
