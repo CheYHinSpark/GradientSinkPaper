@@ -231,9 +231,9 @@ We compare each gradient-reshaping ratio with the corresponding input activation
 The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding,wang2024deepnet}.
 The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
 Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
-That is, the most amplified gradients are also the most strongly compressed before being passed back into the residual stream.
+That is, the most amplified gradients are also the most strongly compressed before being passed back into the residual stream, avoiding uncontrolled gradient growth.
 
-Taken together, these ratio measurements show empirically that massive activations align with a local gradient-regulation pattern: large-activation sites on the sink token exhibit the strongest branch-local amplification and activation-dependent compression, while the residual-stream gradient change remains controlled.
+Taken together, these measurements give a backward-pass view of massive activations on the first token. They suggest that these large norms are not merely forward numerical outliers, but mark sites where gradient concentrations are locally reshaped.
 
 \section{Theoretical Mechanism}\label{sec:theory}
 
