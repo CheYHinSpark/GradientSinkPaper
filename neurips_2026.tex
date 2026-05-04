@@ -70,9 +70,9 @@
 
 \begin{abstract}
 Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. 
-Existing explanations have largely focused on the forward pass, yet in pre-norm Transformers, large residual-stream norms have an indirect forward role because sublayers operate on normalized inputs.
-We study this relationship from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. Because the RMSNorm Jacobian attenuates gradients roughly in inverse proportion to input norm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training.
-This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results support gradient sinks as a backward-pass mechanism through which attention sinks create localized training pressure, and explain massive activations as an adaptive RMSNorm-mediated response that attenuates this pressure. Our code is available at \href{https://anonymous.4open.science/r/GradientSinkCode-B309}{https://anonymous.4open.science/r/GradientSinkCode-B309}.
+Existing explanations have largely focused on the forward pass, yet in pre-norm Transformers, large residual-stream norms play only an indirect forward role because sublayers operate on normalized inputs.
+We study this relationship from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. Since the RMSNorm Jacobian attenuates gradients roughly in inverse proportion to input norm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training.
+This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results identify gradient sinks as a backward-pass consequence of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at \href{https://anonymous.4open.science/r/GradientSinkCode-B309}{https://anonymous.4open.science/r/GradientSinkCode-B309}.
 \end{abstract}
 
 \section{Introduction}
@@ -91,7 +91,7 @@ Our contributions are threefold:
 \begin{itemize}
 \item \textbf{Gradient sinks.} We identify gradient sinks as a backward-pass counterpart of attention sinks in pre-norm Transformers. We show that concentrated gradient pressure at the first token is widespread across models.
 \item \textbf{Mechanism.} We provide an empirical and theoretical account of massive activations as adaptive regulators. In pre-norm architectures, RMSNorm makes activation scale an effective local factor to attenuate gradient pressure induced by attention sinks, thereby stabilizing gradient transport across the residual stream.
-\item \textbf{Intervention.} We propose \emph{V-scale}, a value-path gradient valve that attenuates sink-induced gradients. V-scale preserves attention sinks while suppressing massive activations, thereby supporting our mechanism. It also improves long-context retrieval robustness, including under several quantization settings.
+\item \textbf{Intervention.} We propose \emph{V-scale}, a value-path gradient valve that attenuates sink-induced gradients. V-scale substantially suppresses massive activations while preserving attention sinks, providing support for the proposed mechanism. It also improves long-context retrieval robustness, including under several quantization settings.
 \end{itemize}
 
 \section{Setup}
