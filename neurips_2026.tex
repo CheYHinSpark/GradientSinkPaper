@@ -45,23 +45,26 @@
 
 \title{Attention Sinks Induce Gradient Sinks: Massive Activations as Gradient Regulators in Transformers}
 \author{
-    Yihong Chen \\
-    Department of Electronic Engineering\\
-    Tsinghua University\\
-    Beijing, China \\
-    \texttt{chenyihong@tsinghua.edu.cn} \\
-    \And
-    Zhouchen Lin \\
-    School of Intelligence Science and Technology\\
-    Peking University\\
-    Beijing, China \\
-    \texttt{zlin@pku.edu.cn} \\
-    \And
-    Quanming Yao \\
-    Department of Electronic Engineering\\
-    Tsinghua University\\
-    Beijing, China \\
-    \texttt{qyaoaa@tsinghua.edu.cn} \\
+    Yihong Chen$^1$\qquad Zhouchen Lin$^2$\thanks{Co-corresponding authors.}\qquad Quanming Yao$^1$\footnotemark[1] \\
+    $^1$Tsinghua University\qquad $^2$Peking University\\
+    \texttt{chenyihong@tsinghua.edu.cn}\quad \texttt{zlin@pku.edu.cn}\quad \texttt{qyaoaa@tsinghua.edu.cn} \\
+    % Yihong Chen \\
+    % Department of Electronic Engineering\\
+    % Tsinghua University\\
+    % Beijing, China \\
+    % \texttt{chenyihong@tsinghua.edu.cn} \\
+    % \And
+    % Zhouchen Lin \\
+    % School of Intelligence Science and Technology\\
+    % Peking University\\
+    % Beijing, China \\
+    % \texttt{zlin@pku.edu.cn} \\
+    % \And
+    % Quanming Yao \\
+    % Department of Electronic Engineering\\
+    % Tsinghua University\\
+    % Beijing, China \\
+    % \texttt{qyaoaa@tsinghua.edu.cn} \\
 }
 
 
@@ -91,7 +94,7 @@ Our contributions are threefold:
 \begin{itemize}
 \item \textbf{Gradient sinks.} We identify gradient sinks as a backward-pass counterpart of attention sinks in pre-norm Transformers. We show that concentrated gradient pressure at the first token is widespread across models.
 \item \textbf{Mechanism.} We provide an empirical and theoretical account of massive activations as adaptive regulators. In pre-norm architectures, RMSNorm makes activation scale an effective local factor to attenuate gradient pressure induced by attention sinks, thereby stabilizing gradient transport across the residual stream.
-\item \textbf{Intervention.} We propose \emph{V-scale}, a value-path gradient valve that attenuates sink-induced gradients. V-scale substantially suppresses massive activations while preserving attention sinks, providing support for the proposed mechanism. It also improves long-context retrieval robustness, including under several quantization settings.
+\item \textbf{Intervention.} We propose \emph{V-scale}, a value-path gradient valve that attenuates sink-induced gradients. V-scale substantially suppresses massive activations while preserving attention sinks, thus supporting our proposed mechanism. It also improves long-context retrieval robustness, including under several quantization settings.
 \end{itemize}
 
 \section{Setup}
@@ -1362,6 +1365,11 @@ The first identity is the chain rule. Since $J_\phi(v)$ is symmetric, its operat
 
 These results show that V-scale introduces an additional value-path gradient valve. In the regime where sink value states have relatively small norm, the attenuation factor in Corollary~\ref{cor:vscale_main} can be substantially below one, which is precisely the regime relevant to the observed intervention effect.
 
+\makeatletter
+\if@preprint
+% hide license and checklist if preprint
+\else
+
 \section{Licenses for existing assets}
 \label{app:license}
 
@@ -1391,5 +1399,8 @@ Our experiments rely on several publicly available datasets, models, tokenizers,
 
 \newpage
 \input{checklist.tex}
+
+\fi
+\makeatother
 
 \end{document}
