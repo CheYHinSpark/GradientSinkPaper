@@ -60,6 +60,18 @@ One minor suggestion for strengthening the work would be to include a discussion
 
 **Confidence:** 4.
 
+## Reply to Reviewer pqQy
+
+**AI-generated reply. Waiting for checking.**
+
+Thank you for this insightful suggestion. We agree that the improvements on ARC-C and BoolQ are worth discussing in relation to the NIAH results.
+
+A possible common factor is selective use of task-relevant contextual information under competing cues. BoolQ directly requires identifying evidence from a passage, while the multi-key NIAH setting requires retrieving the correct association among multiple candidates. ARC-C is less directly a retrieval task, but it also requires selecting and combining relevant information from the question and answer choices.
+
+One possible interpretation is that V-scale preserves the anchoring structure provided by attention sinks while reducing the excessive value-path gradient pressure and massive activations localized at sink tokens. This may allow task-relevant non-sink information to participate more effectively in the model’s representation dynamics. Consistent with this interpretation, the improvements on ARC-C and BoolQ persist across bfloat16 and all four quantization settings in Table 4, while the clearest NIAH gains occur in the multi-key setting.
+
+However, our current experiments do not establish a causal coupling between these benchmark improvements. We will therefore present this as a plausible interpretation rather than a conclusion, and add a brief discussion in the revision.
+
 ## Official Review of Submission17495 by Reviewer 6L5L
 
 **Summary:**
