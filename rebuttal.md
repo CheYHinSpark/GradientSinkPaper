@@ -35,7 +35,7 @@ Overall, the analysis of gradient sink phenomena in this paper is a valuable con
 
 ## Reply to Reviewer gq1u
 
-首先是感谢的套话
+We thank the reviewer for recognizing the value of our backward-pass analysis, the realism of our setting, and the clarity of the presentation. We also appreciate the concerns regarding the role and evaluation of V-scale, which we address point by point below.
 
 **Reply to Weakness 1:**
 
@@ -151,7 +151,7 @@ elif method == "w8a8_stress":
 
 **Reply to Paper Formatting Concerns:**
 
-感谢建议，如果接受在Camera-Ready版本会改的。
+Thank you for the concrete suggestion. We agree that the current tables can be made easier to read. We will bold the best result in each comparison throughout the revised manuscript.
 
 ## Official Review of Submission17495 by Reviewer pqQy
 
@@ -236,7 +236,7 @@ At this point, I am leaning toward accepting this paper. Though I believe addres
 
 ## Reply to Reviewer 6L5L
 
-先说一些感谢的套话
+We thank the reviewer for the careful reading and encouraging assessment. We especially appreciate the concrete suggestions for isolating the causal mechanism and improving the presentation. We address the questions below.
 
 **Reply to Question(1):**
 
@@ -255,10 +255,35 @@ $$
 
 **Reply to Question(2):**
 
-首先要感谢审稿人，您的理解完全正确。
+Thank you for pointing this out. The reviewer's interpretation of $\mathrm{Compress}$ is correct. For the attention branch, the relevant forward computation is
 
-承诺如果被接受，在Camera-ready版本中我们会补充正式的示意图（注意rebuttal也不允许用链接方式绕过媒介限制），现在rebuttal中我们用markdown文本画一个示意图
+```text
+h^l --RMSNorm--> h_tilde^l --Attention--> r_attn^l
+ |                                             |
+ +---------------- residual addition ---------+--> h^(l+1/2)
+```
+
+Let $g_{\mathrm{out}}=\nabla_{h^{\ell+1/2}}\mathcal L=\nabla_{r^{\mathrm{attn},\ell}}\mathcal L$ be the residual-stream gradient after the attention branch, and let $g_{\mathrm{norm}}=\nabla_{\widetilde h^\ell}\mathcal L$ be the gradient at the RMSNorm output. The contribution transmitted back through the normalized branch is
+
+$$
+g_{\mathrm{branch}}=\nabla_{h^\ell}\mathcal L-\nabla_{h^{\ell+1/2}}\mathcal L
+=J_{\mathrm{RMSNorm}}(h^\ell)^\top g_{\mathrm{norm}}.
+$$
+
+Accordingly, $\mathrm{Bloat}$ measures branch-local amplification from $g_{\mathrm{out}}$ to $g_{\mathrm{norm}}$, $\mathrm{Change}$ measures the total change in residual-stream gradient norm across the branch, and $\mathrm{Compress}$ measures how much of $g_{\mathrm{norm}}$ is retained after transmission through RMSNorm, namely $\|g_{\mathrm{branch}}\|/\|g_{\mathrm{norm}}\|$. The MLP definitions are exactly analogous. We agree that presenting the names before this computational intuition makes them unnecessarily difficult to follow. We will introduce this flow before the definitions and add a formal schematic highlighting the compared gradient sites in the revised manuscript.
 
 **Reply to Question(3):**
 
-再次感谢审稿人的建议。同样承诺如果接受会补充图片或者公式说明。
+We agree, and the reviewer's summary captures the intended high-level mechanism. We will add an overview schematic connecting Sections 4 and 5 along the following chain:
+
+```text
+attention sink
+    -> attention-column gradient aggregation
+    -> large value-path gradient at the sink token (gradient sink)
+    -> localized training pressure
+    -> large residual activation (massive activation)
+    -> RMSNorm gradient compression
+    -> stable residual-stream gradient transport
+```
+
+The same schematic will show V-scale as an alternative value-path gradient valve: it attenuates the sink-induced gradient pressure and thereby reduces the need for massive activations without directly modifying the query-key attention computation; empirically, the attention-sink structure remains largely intact. We will place this overview before the detailed theory and intervention so that the reader has the complete conceptual map before encountering the individual derivations and measurements.
