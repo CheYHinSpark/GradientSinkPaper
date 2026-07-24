@@ -40,11 +40,15 @@ We thank the reviewer for recognizing the value of our backward-pass analysis, t
 **Reply to Weakness 1:**
 
 回复策略：
-明确文章定位。论文的核心是机制和原理发现与分析，而不是提出新的SOTA。我们不声称V-scale是普遍更优的架构。事实上我们也没有和其他新兴架构对比。
+明确文章定位。论文的核心是机制和原理发现与分析，而不是提出新的SOTA。我们不声称V-scale是普遍更优的架构，也没有主张 V-scale 是保证标准 Transformer 稳定训练所必需的。V-scale在本文中的主要定位是作为验证机制的工具，其次才是可能具有实践收益的训练期改动。
 
-指出逻辑漏洞。审稿人的核心关注是：如果标准架构中MA已经可以消除梯度sink，不影响训练稳定，那么没有必须消除MA。回复：是的，您说得对。然而您的质疑恰恰建立在本文的核心贡献之上：即sink token巨大激活在反向传播中的作用。To our knowledge，这在此前并不是周知的。我们并没有宣称巨大激活影响了训练稳定。
+指出逻辑漏洞。
+Section 3.2 中 residual gradient 保持稳定，如果标准架构中MA已经可以消除梯度sink，不影响训练稳定，那么没有必须消除MA。然而这恰恰是本文的核心问题：即sink token巨大激活在pre-norm Transformer反向传播中的作用。To our knowledge，这在此前并不是周知的。我们并没有宣称巨大激活影响了训练稳定。
+事实上，“baseline 已经利用 MA 调节梯度”不是对论文的反驳，恰恰是我们的 Main Claim 本身。
+V-scale 的意义在于提供另一条衰减路径，从而验证模型对 MA 的依赖是否随梯度压力下降而减弱。
 
-讨论潜在价值。虽然，我们的结果可能对未来研究产生积极影响。我们揭示了梯度的内在情况，为后续架构设计提供了参照。
+对于“必须重新预训练、验证成本高”，应当完全承认：V-scale 并非面向现有模型的低成本 post-hoc 方法。因为论文研究的是 MA 在训练中为何形成，所以机制干预必须发生在训练阶段；post-hoc 修改无法回答这个因果问题。
+讨论潜在价值。虽然如此，我们的结果可能对未来研究产生积极影响。我们揭示了梯度的内在情况，为后续架构设计提供了参照。
 
 **Reply to Weakness 2:**
 
@@ -148,6 +152,13 @@ elif method == "w8a8_stress":
 **Reply to Weakness 3:**
 
 与前面类似
+
+<!-- 承认 V-scale 并非训练稳定性所必需，也不被提出为普遍更优的架构。
+强调这不削弱其作为机制干预的价值。
+明确量化和 retrieval 是 secondary evaluation，不是 Main Claim 成立的前提。
+澄清现有量化 claim 是“在若干量化设置下仍观察到 retrieval gains”，不是“V-scale 普遍更抗量化”。
+对 Appendix 的负面结果坦率说明，这些结果限制 minor claim 的适用范围，但不构成对机制结论的反证。
+值得指出：即使完全删除量化收益这一 minor claim，论文的核心机制发现和 V-scale 的因果验证仍然完整成立。 -->
 
 **Reply to Paper Formatting Concerns:**
 
