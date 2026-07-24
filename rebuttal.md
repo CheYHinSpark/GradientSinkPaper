@@ -33,6 +33,126 @@ Overall, the analysis of gradient sink phenomena in this paper is a valuable con
 
 **Paper Formatting Concerns:** Please format the best results in each table in bold. This will significantly improve readability.
 
+## Reply to Reviewer gq1u
+
+首先是感谢的套话
+
+**Reply to Weakness 1:**
+
+回复策略：
+明确文章定位。论文的核心是机制和原理发现与分析，而不是提出新的SOTA。我们不声称V-scale是普遍更优的架构。事实上我们也没有和其他新兴架构对比。
+
+指出逻辑漏洞。审稿人的核心关注是：如果标准架构中MA已经可以消除梯度sink，不影响训练稳定，那么没有必须消除MA。回复：是的，您说得对。然而您的质疑恰恰建立在本文的核心贡献之上：即sink token巨大激活在反向传播中的作用。To our knowledge，这在此前并不是周知的。我们并没有宣称巨大激活影响了训练稳定。
+
+讨论潜在价值。虽然，我们的结果可能对未来研究产生积极影响。我们揭示了梯度的内在情况，为后续架构设计提供了参照。
+
+**Reply to Weakness 2:**
+
+您说得对。巨大激活，或者更准确的说，激活的不均衡，是量化的头号敌人。但是具体量化方法涉及到许多细节。
+
+首先，我们在论文中其实没有直接宣称V-scale模型相对标准结构更加能够抵抗量化。
+
+量化这个事情没有看起来那么简单直接，很多量化是W4A16，即只是量化了权重而没有量化激活值，因此这些量化方法下不必然有什么优势
+
+其次，即便是SmoothQuant这些W8A8量化，包括AWQ这些，都针对标准模型的激活值不均衡问题做了专门处理，已经处理得很好了。我们的模型反而不一定适应这种处理。 最最重磅的来了，即便是W8A8量化了激活值，事实上，这里的“激活值”只是矩阵乘法前的激活值，例如计算QKV、这些激活值已经经过了RMSNorm，没有那么危险了。计算结果加回残差流的时候已经是16bit。
+
+那么V-scale真的就没有量化收益了吗，其实是有的。我们可以采取更加粗暴的量化配置
+
+参见下面3种
+
+```python
+elif method == "w8a8":
+    int8_weight_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "channel",
+        "dynamic": False,
+    }
+
+    int8_act_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "token",
+        "dynamic": True,
+    }
+
+    recipe = [
+        QuantizationModifier(
+            config_groups={
+                "linear_w8a8": {
+                    "targets": ["Linear"],
+                    "weights": int8_weight_args,
+                    "input_activations": int8_act_args,
+                }
+            },
+            ignore=["lm_head"],
+        )
+    ]
+elif method == "w8a8_act":
+    weight_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "channel",
+        "dynamic": False,
+    }
+
+    activation_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "tensor",
+        "dynamic": False,
+    }
+
+    recipe = [
+        QuantizationModifier(
+            config_groups={
+                "linear_w8a8": {
+                    "targets": ["Linear"],
+                    "weights": weight_args,
+                    "input_activations": activation_args,
+                }
+            },
+            ignore=["lm_head"],
+        )
+    ]
+elif method == "w8a8_stress":
+    int8_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "tensor",
+        "dynamic": False,
+    }
+    recipe = [
+        QuantizationModifier(
+            config_groups={
+                "linear_w8a8": {
+                    "targets": ["Linear"],
+                    "weights": int8_args,
+                    "input_activations": int8_args,
+                }
+            },
+            ignore=["lm_head"],
+        )
+    ]
+```
+
+在后两种配置下，baseline会被直接干报废，但是V-scale仍然可以维持一定性能。
+
+但是这是非常粗暴不合理的量化配方，因此我们没有在论文中给出。
+
+**Reply to Weakness 3:**
+
+与前面类似
+
+**Reply to Paper Formatting Concerns:**
+
+感谢建议，如果接受在Camera-Ready版本会改的。
+
 ## Official Review of Submission17495 by Reviewer pqQy
 
 **Summary:**
@@ -109,3 +229,32 @@ At this point, I am leaning toward accepting this paper. Though I believe addres
 **Rating:** 4.
 
 **Confidence:** 4.
+
+## Reply to Reviewer 6L5L
+
+先说一些感谢的套话
+
+**Reply to Question(1):**
+
+我们接受建议并完成第一个建议的实验。
+
+具体而言我们设置了一个Backward-only 版本的 V-scale：
+在计算完v_proj得到V之后
+
+$$
+\hat v = \mathrm{stopgrad}(v) + (\phi(v) - \mathrm{stopgrad}(\phi(v))).
+$$
+
+其中 stopgrad 通过 PyTorch 的 detach 方法实现。$\phi$表示的是论文中的V-scale公式。这样得到了前向保持V，反向却具有V-scale效应的算子。虽然我们认为使用了detach不是正常的大模型预训练，但这的确可以有效补充因果关系的严谨性。
+
+等待结果（必须要用文本表达）
+
+**Reply to Question(2):**
+
+首先要感谢审稿人，您的理解完全正确。
+
+承诺如果被接受，在Camera-ready版本中我们会补充正式的示意图（注意rebuttal也不允许用链接方式绕过媒介限制），现在rebuttal中我们用markdown文本画一个示意图
+
+**Reply to Question(3):**
+
+再次感谢审稿人的建议。同样承诺如果接受会补充图片或者公式说明。
