@@ -182,15 +182,19 @@ One minor suggestion for strengthening the work would be to include a discussion
 
 ## Reply to Reviewer pqQy
 
-**AI-generated reply. Waiting for checking.**
+Thank you for this insightful suggestion. We agree that the concurrent improvements on ARC-C, BoolQ, and (multi-key) NIAH merit a joint discussion.
 
-Thank you for this insightful suggestion. We agree that the improvements on ARC-C and BoolQ are worth discussing in relation to the NIAH results.
+A plausible commonality is query-conditioned selection and routing of relevant information under competing cues. BoolQ requires identifying supporting evidence in a passage; multi-key NIAH requires retrieving the queried association among multiple candidates; and ARC-C, although less directly a contextual retrieval task, requires selecting and combining relevant scientific knowledge while discriminating among competing answer choices. Notably, the results do not show a uniform improvement across all benchmarks. This makes a shared demand for selective information use a plausible, although not yet established, explanation for the stronger gains on these tasks.
 
-A possible common factor is selective use of task-relevant contextual information under competing cues. BoolQ directly requires identifying evidence from a passage, while the multi-key NIAH setting requires retrieving the correct association among multiple candidates. ARC-C is less directly a retrieval task, but it also requires selecting and combining relevant information from the question and answer choices.
+Appendix Figure 13 provides a tentative mechanistic connection. It shows the learned V-scale parameters across layers and value heads. Beyond the clear layer-wise pattern, different heads within the same layer learn different V-scale strengths. This heterogeneity is potentially relevant because prior work has identified linguistically specialized attention heads [1], a small set of heads that transport compact task representations (“function vectors”) [2], and sparse retrieval heads central to long-context factuality [3]. Together, these observations motivate the hypothesis that head-dependent value-path gradient modulation may interact with functionally heterogeneous pathways for information selection and routing.
 
-One possible interpretation is that V-scale preserves the anchoring structure provided by attention sinks while reducing the excessive value-path gradient pressure and massive activations localized at sink tokens. This may allow task-relevant non-sink information to participate more effectively in the model’s representation dynamics. Consistent with this interpretation, the improvements on ARC-C and BoolQ persist across bfloat16 and all four quantization settings in Table 4, while the clearest NIAH gains occur in the multi-key setting.
+We emphasize that this interpretation remains a hypothesis. Figure 13 does not identify the functions of individual heads, and our experiments do not establish a causal coupling among the benchmark gains. A detailed analysis is an interesting direction for future work. We will add this discussion while clearly presenting it as a hypothesis rather than a conclusion.
 
-However, our current experiments do not establish a causal coupling between these benchmark improvements. We will therefore present this as a plausible interpretation rather than a conclusion, and add a brief discussion in the revision.
+[1] Elena Voita, David Talbot, Fedor Moiseev, Rico Sennrich, Ivan Titov. _Analyzing Multi-Head Self-Attention: Specialized Heads Do the Heavy Lifting, the Rest Can Be Pruned_. ACL 2019.
+
+[2] Eric Todd, Millicent Li, Arnab Sen Sharma, Aaron Mueller, Byron C. Wallace, David Bau. _Function Vectors in Large Language Models_. ICLR 2024.
+
+[3] Wenhao Wu, Yizhong Wang, Guangxuan Xiao, Hao Peng, Yao Fu. _Retrieval Head Mechanistically Explains Long-Context Factuality_. ICLR 2025.
 
 ## Official Review of Submission17495 by Reviewer 6L5L
 
