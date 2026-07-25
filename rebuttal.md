@@ -49,6 +49,45 @@ We also agree that V-scale must be introduced during pretraining and is therefor
 
 **Reply to Weakness 2:**
 
+第一层：承认表述可能造成了更强的解读
+论文没有声称 universal quantization improvement；
+但我们承认现有措辞没有充分区分两种命题，因此造成了误解。特别是L214，我们愿意弱化这部分表述。
+关键区别是：
+V-scale performs better under a quantized setting
+不等于：
+V-scale suffers less degradation because of quantization。
+
+Table 4 支持的是前者：在同一 PTQ 配置下，V-scale 的 multi-key NIAH 绝对准确率更高。它没有通过相对各自 BF16 的性能下降来证明 quantization robustness。
+
+第二层：解释为什么现有 PTQ 结果不直接检验 MA 的量化影响
+需要简洁说明方法差异，但不要写成给负面结果找借口：
+首先，MA 的测量位置是残差流激活值。
+
+BNB、GPTQ、AWQ 在文中的设置都是 W4A16，运行时 activation 仍为 16 bit。因此，减少 MA 并不必然改善这些 weight-only 方法。
+GPTQ/AWQ 虽然使用 activation statistics 优化权重量化，不直接量化 MA 所在的 residual-stream activation。
+因此，V-scale不会天然在这些配置下获得优势。
+
+<!-- 这里有必要写出SmoothQuant具体配置吗 -->
+SmoothQuant 是 W8A8，但这里量化的 activation 指的只是 Linear 的输入激活，包括 q/k/v/o_proj 等等。 Linear 输入已经经过 RMSNorm，而且 SmoothQuant 本身专门重新分配 activation outliers。加回残差流时已经回到了16bit，因此也不是对 residual stream 上的 MA 的直接量化实验。
+由此得到的结论只能是：
+当前 PTQ 实验评价的是 V-scale 模型在常见压缩设置下能否保持能力，而不是对“MA suppression improves residual-stream quantization”进行机制隔离。
+
+这里不要说 GPTQ/AWQ “不相关”。它们仍然决定 practical generalization，只是不直接验证 MA 的量化机制。
+
+第三层：明确论文实际支持什么（这部分是否应该放回第一层）
+可以强调：
+主表支持 V-scale 在 multi-key NIAH 的所有列中取得更高绝对准确率。
+Appendix 的标准任务结果支持 broadly comparable，而不是普遍提升。
+Appendix 已明确写明不声称 uniformly improves every benchmark。
+
+第四层：给出具体修改承诺
+修改L214等位置将 practically relevant 收窄为 potentially relevant；
+将贡献项中的表述改为类似“achieves higher multi-key retrieval accuracy under the evaluated BF16 and PTQ settings”；
+明确这些结果不是 universal quantization-robustness claim。
+
+第五层，补特殊量化配方（是否真的需要）
+不建议使用当前的 w8a8_act 和 w8a8_stress 作为主要反击。尤其 baseline 被特殊配置直接破坏，很容易被看成 post-hoc 选择实验，而且会把论文拖离机制核心。
+
 您说得对。巨大激活，或者更准确的说，激活的不均衡，是量化的头号敌人。但是具体量化方法涉及到许多细节。
 
 首先，我们在论文中其实没有直接宣称V-scale模型相对标准结构更加能够抵抗量化。
@@ -120,24 +159,33 @@ elif method == "w8a8_act":
             ignore=["lm_head"],
         )
     ]
-elif method == "w8a8_stress":
-    int8_args = {
+elif method == "w8a8_down_only":
+    weight_args = {
+        "num_bits": 8,
+        "type": "int",
+        "symmetric": True,
+        "strategy": "channel",
+        "dynamic": False,
+    }
+
+    activation_args = {
         "num_bits": 8,
         "type": "int",
         "symmetric": True,
         "strategy": "tensor",
         "dynamic": False,
     }
+
     recipe = [
         QuantizationModifier(
             config_groups={
-                "linear_w8a8": {
-                    "targets": ["Linear"],
-                    "weights": int8_args,
-                    "input_activations": int8_args,
+                "down_proj_a8_static": {
+                    "targets": [r"re:.*mlp\.down_proj$"],
+                    "weights": weight_args,
+                    "input_activations": activation_args,
                 }
             },
-            ignore=["lm_head"],
+            ignore=[],
         )
     ]
 ```
@@ -263,35 +311,42 @@ $$
 
 **Reply to Question(2):**
 
-Thank you for pointing this out. The reviewer's interpretation of $\mathrm{Compress}$ is correct. For the attention branch, the relevant forward computation is
+Thank you for pointing this out. We agree and will add more explanation where we introduce these names. We will also add the suggested schematic to illustrate the computation. For the attention branch, the relevant forward computation is
 
 ```text
-h^l --RMSNorm--> h_tilde^l --Attention--> r_attn^l
+h^l --RMSNorm--> tilde{h}^l --Attention--> r_attn^l
  |                                             |
- +---------------- residual addition ---------+--> h^(l+1/2)
+ +---------------- residual addition ----------+--> h^{l+1/2} = h^l + r_attn^l
 ```
 
-Let $g_{\mathrm{out}}=\nabla_{h^{\ell+1/2}}\mathcal L=\nabla_{r^{\mathrm{attn},\ell}}\mathcal L$ be the residual-stream gradient after the attention branch, and let $g_{\mathrm{norm}}=\nabla_{\widetilde h^\ell}\mathcal L$ be the gradient at the RMSNorm output. The contribution transmitted back through the normalized branch is
+Let
 
-$$
-g_{\mathrm{branch}}=\nabla_{h^\ell}\mathcal L-\nabla_{h^{\ell+1/2}}\mathcal L
-=J_{\mathrm{RMSNorm}}(h^\ell)^\top g_{\mathrm{norm}}.
-$$
+- $g_1=\nabla_{h^{\ell+1/2}}\mathcal L=\nabla_{r^{\mathrm{attn},\ell}}\mathcal L$ be the residual-stream gradient after the attention branch,
+- $g_2=\nabla_{\widetilde h^\ell}\mathcal L$ be the gradient at the RMSNorm output,
+- $g_3=\nabla_{h^\ell}\mathcal L-\nabla_{h^{\ell+1/2}}\mathcal L=J_{\mathrm{RMSNorm}}(h^\ell)^\top g_2$ be the contribution transmitted back through the normalized branch.
 
-Accordingly, $\mathrm{Bloat}$ measures branch-local amplification from $g_{\mathrm{out}}$ to $g_{\mathrm{norm}}$, $\mathrm{Change}$ measures the total change in residual-stream gradient norm across the branch, and $\mathrm{Compress}$ measures how much of $g_{\mathrm{norm}}$ is retained after transmission through RMSNorm, namely $\|g_{\mathrm{branch}}\|/\|g_{\mathrm{norm}}\|$. The MLP definitions are exactly analogous. We agree that presenting the names before this computational intuition makes them unnecessarily difficult to follow. We will introduce this flow before the definitions and add a formal schematic highlighting the compared gradient sites in the revised manuscript.
+Accordingly,
+
+- $\mathrm{Bloat}=\|g_2\|/\|g_1\|$ measures branch-local amplification from $g_1$ to $g_2$,
+- $\mathrm{Change}=\|g_1+g_3\|/\|g_1\|$ measures the total change in residual-stream gradient norm across the branch,
+- $\mathrm{Compress}=\|g_3\|/\|g_2\|$ measures the norm gain when the branch gradient is backpropagated through RMSNorm.
+
+The MLP definitions are exactly analogous. We agree that presenting the names before this computational intuition makes them unnecessarily difficult to follow. We will introduce a formal schematic highlighting the compared gradient sites.
 
 **Reply to Question(3):**
 
-We agree, and the reviewer's summary captures the intended high-level mechanism. We will add an overview schematic connecting Sections 4 and 5 along the following chain:
+Thanks again for your kind suggestion, and the summary captures the logic. We agree and will add an overview schematic connecting Sections 3, 4 and 5 along the following chain:
 
 ```text
 attention sink
-    -> attention-column gradient aggregation
-    -> large value-path gradient at the sink token (gradient sink)
-    -> localized training pressure
-    -> large residual activation (massive activation)
-    -> RMSNorm gradient compression
-    -> stable residual-stream gradient transport
+    |
+    |   (<-- alternative gradient valve)
+    |
+gradient aggregation
+    |
+    |<-- RMSNorm compression <-- massive activation
+    |
+mild change in residual-stream gradient norm
 ```
 
-The same schematic will show V-scale as an alternative value-path gradient valve: it attenuates the sink-induced gradient pressure and thereby reduces the need for massive activations without directly modifying the query-key attention computation; empirically, the attention-sink structure remains largely intact. We will place this overview before the detailed theory and intervention so that the reader has the complete conceptual map before encountering the individual derivations and measurements.
+The same schematic will also show how V-scale works as an alternative value-path gradient valve. By weakening sink-induced value-path gradient pressure, V-scale produces the predicted reduction in reliance on massive activations. We will place a formal overview before the detailed analysis and intervention so that the reader has the complete conceptual map before encountering the individual derivations and measurements.
