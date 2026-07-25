@@ -39,16 +39,13 @@ We thank the reviewer for recognizing the value of our backward-pass analysis, t
 
 **Reply to Weakness 1:**
 
-回复策略：
-明确文章定位。论文的核心是机制和原理发现与分析，而不是提出新的SOTA。我们不声称V-scale是普遍更优的架构，也没有主张 V-scale 是保证标准 Transformer 稳定训练所必需的。V-scale在本文中的主要定位是作为验证机制的工具，其次才是可能具有实践收益的训练期改动。
+We agree that V-scale is not necessary for the stable training of Transformers, and we do not propose it as a universally superior architecture. Its primary role in this work is as a mechanistic test that introduces a transparent gradient valve in the value path.
 
-指出逻辑漏洞。
-Section 3.2 中 residual gradient 保持稳定，如果标准架构中MA已经可以消除梯度sink，不影响训练稳定，那么没有必须消除MA。然而这恰恰是本文的核心问题：即sink token巨大激活在pre-norm Transformer反向传播中的作用。To our knowledge，这在此前并不是周知的。我们并没有宣称巨大激活影响了训练稳定。
-事实上，“baseline 已经利用 MA 调节梯度”不是对论文的反驳，恰恰是我们的 Main Claim 本身。
-V-scale 的意义在于提供另一条衰减路径，从而验证模型对 MA 的依赖是否随梯度压力下降而减弱。
+Section 3.2 indeed shows that, in the trained baseline, severe branch-local gradient amplification produces only mild changes in the residual-stream gradient. Crucially, it also identifies the reason. Namely, the same massive-activation sites exhibit strong RMSNorm-mediated compression. The stable transport of residual-stream gradients in the baseline is therefore the phenomenon explained by our central finding: *massive activations act as learned local regulators of sink-induced gradient pressure*. In other words, the observation that the baseline already regulates this pressure is precisely our main mechanistic claim.
 
-对于“必须重新预训练、验证成本高”，应当完全承认：V-scale 并非面向现有模型的低成本 post-hoc 方法。因为论文研究的是 MA 在训练中为何形成，所以机制干预必须发生在训练阶段；post-hoc 修改无法回答这个因果问题。
-讨论潜在价值。虽然如此，我们的结果可能对未来研究产生积极影响。我们揭示了梯度的内在情况，为后续架构设计提供了参照。
+V-scale tests a direct prediction of this account. If massive activations emerge in response to localized gradient pressure, then providing an alternative value-path gradient valve should reduce reliance on massive activations while leaving the attention-sink structure largely intact. This is the predicted pattern we observe. The comparable downstream results serve as a basic capability check, showing that suppressing massive activations does not simply damage ordinary model behavior, rather than as evidence of universal performance superiority.
+
+We also agree that V-scale must be introduced during pretraining and is therefore costly to verify. This training-time intervention is nevertheless necessary for the specific test above because our hypothesis concerns why massive activations emerge during optimization. A post-hoc modification of an already trained checkpoint cannot test whether relieving sink-induced gradient pressure during learning reduces the emergence of massive activations. Thus, the matched from-scratch runs should not be interpreted as a recommendation that practitioners replace existing pretrained models. We will clarify this distinction and state explicitly that the practical observations are secondary to V-scale’s evidential role.
 
 **Reply to Weakness 2:**
 
