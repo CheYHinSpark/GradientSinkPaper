@@ -192,7 +192,9 @@ $$
 \hat v = \mathrm{stopgrad}(v) + [\phi(\|v\|_2^2)v - \mathrm{stopgrad}(\phi(\|v\|_2^2)v)].
 $$
 
-Here, $\mathrm{stopgrad}$ is implemented with PyTorch's `detach`, and $\phi$ is the scalar V-scale function defined in the paper. In the forward pass, the two $\phi(\|v\|_2^2)v$ terms cancel, so $\hat v=v$. In the backward pass, however, $\partial\hat v/\partial v=J_\phi(v)$, yielding the V-scale gradient modulation. The associated $\theta_{\ell,h}$ parameters, and hence the attenuation scales $C_{\ell,h}$, are held fixed throughout training because the effective forward output of this diagnostic is independent of them. This construction therefore removes the direct forward contraction identified by the reviewer while retaining the intended backward intervention. Since the `detach` construction imposes a surrogate backward rule rather than the ordinary derivative of its forward map, it should not be viewed as a reasonable model architecture. We use it solely as a diagnostic test of the proposed mechanism.
+Here, $\mathrm{stopgrad}$ is implemented with PyTorch's `detach`, and $\phi$ is the scalar V-scale function defined in the paper. In the forward pass, the two $\phi(\|v\|_2^2)v$ terms cancel, so $\hat v=v$. In the backward pass, however, the V-scale gradient modulation is applied. We freeze the parameter $\theta_{\ell,h}=0$ throughout training. This is a deliberate diagnostic choice. Without explicit freezing, the surrogate backward construction would still produce gradients with respect to $\theta_{\ell,h}$, even though its forward value is independent of these parameters.
+
+This construction removes the direct forward contraction identified by the reviewer while retaining the intended backward intervention. Since the `detach` construction imposes a surrogate backward rule rather than the ordinary derivative of its forward map, it should not be viewed as a reasonable model architecture. We use it solely as a diagnostic test of the proposed mechanism.
 
 We trained this backward-only model under the same 0.3B training configuration and evaluated all three models at checkpoint 20,000. We use the same AS and MA definitions and evaluation protocol as in Figure 7 of the paper. The table reports the mean (maximum) of each layer-wise statistic; `t0/early` is the token-0 norm relative to the mean over positions 1--15.
 
@@ -226,7 +228,7 @@ Accordingly,
 
 - $\mathrm{Bloat}=\|g_2\|/\|g_1\|$ measures branch-local amplification from $g_1$ to $g_2$,
 - $\mathrm{Change}=\|g_1+g_3\|/\|g_1\|$ measures the total change in residual-stream gradient norm across the branch,
-- $\mathrm{Compress}=\|g_3\|/\|g_2\|$ measures the norm gain when the branch gradient is backpropagated through RMSNorm.
+- $\mathrm{Compress}=\|g_3\|/\|g_2\|$ measures the multiplicative norm gain, typically an attenuation factor, when the branch gradient is backpropagated through RMSNorm.
 
 The MLP definitions are exactly analogous. We agree that presenting the names before this computational intuition makes them unnecessarily difficult to follow. We will introduce a formal schematic highlighting the compared gradient sites.
 
@@ -237,12 +239,14 @@ Thanks again for your kind suggestion, and the summary captures the logic. We ag
 ```text
 attention sink
     |
-    |   (<-- alternative gradient valve)
-    |
+    v
 gradient aggregation
     |
-    |<-- RMSNorm compression <-- massive activation
+    v
+gradient pressure at the normalized branch input (<-- alternative gradient valve)
     |
+    |<-- RMSNorm compression <-- massive activation
+    v
 mild change in residual-stream gradient norm
 ```
 
