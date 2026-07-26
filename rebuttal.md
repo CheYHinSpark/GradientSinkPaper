@@ -186,19 +186,25 @@ We thank the reviewer for the careful reading and encouraging assessment. We esp
 
 **Reply to Question(1):**
 
-We appreciate this suggestion and implemented the first proposed intervention: a backward-only version of V-scale. After computing the value projection $v$, we define
+We appreciate this kind suggestion and followed option (i) by training a model with a backward-only version of V-scale. After computing the value projection $v$, we define
 
 $$
-\hat v = \mathrm{stopgrad}(v) + (\phi(v) - \mathrm{stopgrad}(\phi(v))).
+\hat v = \mathrm{stopgrad}(v) + [\phi(\|v\|_2^2)v - \mathrm{stopgrad}(\phi(\|v\|_2^2)v)].
 $$
 
-Here, $\mathrm{stopgrad}$ is implemented with PyTorch's `detach`, and $\phi$ is the V-scale transformation defined in the paper. In the forward pass, the two $\phi(v)$ terms cancel exactly, so $\hat v=v$. In the backward pass, however, $\partial\hat v/\partial v=J_\phi(v)$, yielding the V-scale gradient modulation without directly changing the forward values. This construction therefore isolates the backward intervention from the forward-pass contraction identified by the reviewer. We agree that a `detach`-based operator is a causal diagnostic rather than a conventional architecture for deployment, which is precisely its purpose here.
+Here, $\mathrm{stopgrad}$ is implemented with PyTorch's `detach`, and $\phi$ is the scalar V-scale function defined in the paper. In the forward pass, the two $\phi(\|v\|_2^2)v$ terms cancel, so $\hat v=v$. In the backward pass, however, $\partial\hat v/\partial v=J_\phi(v)$, yielding the V-scale gradient modulation. The associated $\theta_{\ell,h}$ parameters, and hence the attenuation scales $C_{\ell,h}$, are held fixed throughout training because the effective forward output of this diagnostic is independent of them. This construction therefore removes the direct forward contraction identified by the reviewer while retaining the intended backward intervention. Since the `detach` construction imposes a surrogate backward rule rather than the ordinary derivative of its forward map, it should not be viewed as a reasonable model architecture. We use it solely as a diagnostic test of the proposed mechanism.
 
-| condition | Valid loss | AS mean | AS max | x_out t0 mean | x_out t0 max | x_out t0/early | MLP t0 mean | MLP t0 max | MLP t0/early |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 2.9168 | 0.6172 | 0.9844 | 1915.9839 | 2852.1907 | 11.1214 | 346.3468 | 2332.6074 | 6.9438 |
-| Full V-scale | 2.9068 | 0.5018 | 0.9976 | 345.5052 | 617.2366 | 3.0300 | 75.4235 | 452.0810 | 2.2218 |
-| Backward-only | 2.9307 | 0.4583 | 0.8247 | 606.8524 | 951.6826 | 3.6308 | 112.7720 | 433.3082 | 2.3357 |
+We trained this backward-only model under the same 0.3B training configuration and evaluated all three models at checkpoint 20,000. We use the same AS and MA definitions and evaluation protocol as in Figure 7 of the paper. The table reports the mean (maximum) of each layer-wise statistic; `t0/early` is the token-0 norm relative to the mean over positions 1--15.
+
+| Model | Valid loss | AS mean (max) | $x_{\mathrm{out}}$ t0 mean (max) | $x_{\mathrm{out}}$ t0/early | MLP t0 mean (max) |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.9168 | 0.6172 (0.9844) | 1915.9839 (2852.1907) | 11.1214 | 346.3468 (2332.6074) |
+| Full V-scale | 2.9068 | 0.5018 (0.9976) | 345.5052 (617.2366) | 3.0300 | 75.4235 (452.0810) |
+| Backward-only | 2.9307 | 0.4583 (0.8247) | 606.8524 (951.6826) | 3.6308 | 112.7720 (433.3082) |
+
+The backward-only model remains well trained with validation loss 2.9307, compared with 2.9168 for the baseline (a 0.48% relative increase). It also retains substantial attention-sink behavior. In contrast, the massive activations are also strongly suppressed. Relative to the baseline, the mean and maximum token-0 residual-stream output norms decrease by 68.3% and 66.6%, respectively. The token-0-to-early-token ratio drops from 11.12 to 3.63. The mean MLP output norm decreases by 67.4%, while its maximum decreases by 81.4%. This behavior closely tracks the qualitative effect of full V-scale despite the absence of its direct forward transformation.
+
+Thus, changing only the value-path backward rule is sufficient to produce the predicted suppression of massive activations without causing training failure or eliminating the attention sink. This directly addresses the forward-pass confound raised by the reviewer. It does not imply that the forward component of full V-scale has no additional effect. We will add the backward-only construction and its exact forward/backward identities to Section 5.1, report this control in the main intervention results, and provide the full layer-wise measurements.
 
 **Reply to Question(2):**
 
