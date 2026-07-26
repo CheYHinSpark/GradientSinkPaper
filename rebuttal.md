@@ -49,161 +49,58 @@ We also agree that V-scale must be introduced during pretraining and is therefor
 
 **Reply to Weakness 2:**
 
-第一层：承认表述可能造成了更强的解读
-论文没有声称 universal quantization improvement；
-但我们承认现有措辞没有充分区分两种命题，因此造成了误解。特别是L214，我们愿意弱化这部分表述。
-关键区别是：
-V-scale performs better under a quantized setting
-不等于：
-V-scale suffers less degradation because of quantization。
+Thank you for raising this distinction. We acknowledge that the current presentation (e.g., L214) could be read as making a stronger claim than intended. Our original evidence establishes that V-scale attains higher multi-key retrieval accuracy under the evaluated PTQ settings. It does not establish smaller quantization degradation. We will revise this wording to describe quantization as a potential, conditional implication rather than a universal advantage.
 
-Table 4 支持的是前者：在同一 PTQ 配置下，V-scale 的 multi-key NIAH 绝对准确率更高。它没有通过相对各自 BF16 的性能下降来证明 quantization robustness。
+The PTQ methods in the submission also probe different effects. BNB, GPTQ, and AWQ are W4A16 settings and therefore do not quantize runtime activations, so reducing massive activations is not expected to automatically improve them. SmoothQuant is a W8A8 method, but it explicitly compensates for activation outliers. Moreover, its INT8 activation quantization is applied to Linear inputs rather than directly to the residual-stream activations where MA is measured.
 
-第二层：解释为什么现有 PTQ 结果不直接检验 MA 的量化影响
-需要简洁说明方法差异，但不要写成给负面结果找借口：
-首先，MA 的测量位置是残差流激活值。
+To test activation-range sensitivity more directly, we added INT8 experiments with three configurations:
 
-BNB、GPTQ、AWQ 在文中的设置都是 W4A16，运行时 activation 仍为 16 bit。因此，减少 MA 并不必然改善这些 weight-only 方法。
-GPTQ/AWQ 虽然使用 activation statistics 优化权重量化，不直接量化 MA 所在的 residual-stream activation。
-因此，V-scale不会天然在这些配置下获得优势。
+- W8A8 with static per-channel weights and dynamic per-token activations over all Linear layers;
+- the same per-channel weights with calibrated static per-tensor activations over all Linear layers;
+- a localized setting that applies the second W8A8 scheme only to `mlp.down_proj`, leaving all other modules unquantized.
 
-<!-- 这里有必要写出SmoothQuant具体配置吗 -->
-SmoothQuant 是 W8A8，但这里量化的 activation 指的只是 Linear 的输入激活，包括 q/k/v/o_proj 等等。 Linear 输入已经经过 RMSNorm，而且 SmoothQuant 本身专门重新分配 activation outliers。加回残差流时已经回到了16bit，因此也不是对 residual stream 上的 MA 的直接量化实验。
-由此得到的结论只能是：
-当前 PTQ 实验评价的是 V-scale 模型在常见压缩设置下能否保持能力，而不是对“MA suppression improves residual-stream quantization”进行机制隔离。
+The localized setting quantizes the SwiGLU intermediate passed to the down projection, whose output is the MLP site where we observe the strongest reduction of massive activations.
 
-这里不要说 GPTQ/AWQ “不相关”。它们仍然决定 practical generalization，只是不直接验证 MA 的量化机制。
+The results below report Baseline/V-scale pairs on standard LM-eval tasks. Lower perplexity and higher accuracy are better; mean accuracy is the unweighted average over the ten accuracy metrics reported in Table 4, Appendix C.4.
 
-第三层：明确论文实际支持什么（这部分是否应该放回第一层）
-可以强调：
-主表支持 V-scale 在 multi-key NIAH 的所有列中取得更高绝对准确率。
-Appendix 的标准任务结果支持 broadly comparable，而不是普遍提升。
-Appendix 已明确写明不声称 uniformly improves every benchmark。
+| Setting | WikiText PPL(↓) | LAMBADA PPL(↓) | Mean accuracy(↑) |
+| --- | ---: | ---: | ---: |
+| BF16 | 22.84/**22.83** | **15.27**/15.91 | 51.62/**52.23** |
+| All Linear, dynamic-token W8A8 | 23.16/**23.04** | **16.35**/16.90 | 51.77/**52.21** |
+| All Linear, static-tensor W8A8 | 33.55/**25.46** | 46.85/**23.65** | 48.54/**50.55** |
+| `down_proj` only, static-tensor W8A8 | 32.94/**25.21** | 43.63/**23.07** | 48.37/**50.67** |
 
-第四层：给出具体修改承诺
-修改L214等位置将 practically relevant 收窄为 potentially relevant；
-将贡献项中的表述改为类似“achieves higher multi-key retrieval accuracy under the evaluated BF16 and PTQ settings”；
-明确这些结果不是 universal quantization-robustness claim。
+Dynamic per-token W8A8 leaves both models close to BF16, whereas V-scale degrades substantially less under a shared static activation scale. Quantizing only `down_proj` nearly reproduces the all-Linear static result, showing that this pathway alone is sufficient to reproduce almost the entire observed sensitivity. We will provide the full per-task results in the appendix. <!--真的要在正文 report 这个结果吗-->
+More dramatic results happen in NIAH tests, see our reply to Weakness 3.
 
-第五层，补特殊量化配方（是否真的需要）
-不建议使用当前的 w8a8_act 和 w8a8_stress 作为主要反击。尤其 baseline 被特殊配置直接破坏，很容易被看成 post-hoc 选择实验，而且会把论文拖离机制核心。
-
-您说得对。巨大激活，或者更准确的说，激活的不均衡，是量化的头号敌人。但是具体量化方法涉及到许多细节。
-
-首先，我们在论文中其实没有直接宣称V-scale模型相对标准结构更加能够抵抗量化。
-
-量化这个事情没有看起来那么简单直接，很多量化是W4A16，即只是量化了权重而没有量化激活值，因此这些量化方法下不必然有什么优势
-
-其次，即便是SmoothQuant这些W8A8量化，包括AWQ这些，都针对标准模型的激活值不均衡问题做了专门处理，已经处理得很好了。我们的模型反而不一定适应这种处理。 最最重磅的来了，即便是W8A8量化了激活值，事实上，这里的“激活值”只是矩阵乘法前的激活值，例如计算QKV、这些激活值已经经过了RMSNorm，没有那么危险了。计算结果加回残差流的时候已经是16bit。
-
-那么V-scale真的就没有量化收益了吗，其实是有的。我们可以采取更加粗暴的量化配置
-
-参见下面3种
-
-```python
-elif method == "w8a8":
-    int8_weight_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "channel",
-        "dynamic": False,
-    }
-
-    int8_act_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "token",
-        "dynamic": True,
-    }
-
-    recipe = [
-        QuantizationModifier(
-            config_groups={
-                "linear_w8a8": {
-                    "targets": ["Linear"],
-                    "weights": int8_weight_args,
-                    "input_activations": int8_act_args,
-                }
-            },
-            ignore=["lm_head"],
-        )
-    ]
-elif method == "w8a8_act":
-    weight_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "channel",
-        "dynamic": False,
-    }
-
-    activation_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "tensor",
-        "dynamic": False,
-    }
-
-    recipe = [
-        QuantizationModifier(
-            config_groups={
-                "linear_w8a8": {
-                    "targets": ["Linear"],
-                    "weights": weight_args,
-                    "input_activations": activation_args,
-                }
-            },
-            ignore=["lm_head"],
-        )
-    ]
-elif method == "w8a8_down_only":
-    weight_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "channel",
-        "dynamic": False,
-    }
-
-    activation_args = {
-        "num_bits": 8,
-        "type": "int",
-        "symmetric": True,
-        "strategy": "tensor",
-        "dynamic": False,
-    }
-
-    recipe = [
-        QuantizationModifier(
-            config_groups={
-                "down_proj_a8_static": {
-                    "targets": [r"re:.*mlp\.down_proj$"],
-                    "weights": weight_args,
-                    "input_activations": activation_args,
-                }
-            },
-            ignore=[],
-        )
-    ]
-```
-
-在后两种配置下，baseline会被直接干报废，但是V-scale仍然可以维持一定性能。
-
-但是这是非常粗暴不合理的量化配方，因此我们没有在论文中给出。
+We emphasize the scope of this evidence. The localized static scheme is a controlled range-sensitivity diagnostic, not a deployment recipe, and it quantizes the input to `down_proj` rather than the residual stream itself. It supports the conditional conclusion that V-scale is more robust when coarse activation quantization is applied to the MLP pathway associated with its strongest MA reduction, but we do not claim universal quantization robustness.
 
 **Reply to Weakness 3:**
 
-与前面类似
+We agree that the degradations highlighted by the reviewer are substantial. We do not regard these differences as noise, nor do we claim that V-scale is uniformly compatible with every quantization and long-context setting.
 
-<!-- 承认 V-scale 并非训练稳定性所必需，也不被提出为普遍更优的架构。
-强调这不削弱其作为机制干预的价值。
-明确量化和 retrieval 是 secondary evaluation，不是 Main Claim 成立的前提。
-澄清现有量化 claim 是“在若干量化设置下仍观察到 retrieval gains”，不是“V-scale 普遍更抗量化”。
-对 Appendix 的负面结果坦率说明，这些结果限制 minor claim 的适用范围，但不构成对机制结论的反证。
-值得指出：即使完全删除量化收益这一 minor claim，论文的核心机制发现和 V-scale 的因果验证仍然完整成立。 -->
+At the same time, these are not systematic failures.
+尽管在部分pair，比如single-2……
+但是……
+We do not currently have evidence that identifies the cause of this interaction.
+
+与Reply to Weakness 2相同……
+To complement these weight-only results, the following new NIAH results evaluate activation-sensitive W8A8 settings at the native 2048-token context length (Baseline/V-scale):
+
+| Setting | Single-2 | Single-3 | Multi-key |
+| --- | ---: | ---: | ---: |
+| BF16 | **98.00**/97.80 | 85.48/**95.60** | 65.04/**71.64** |
+| All Linear, dynamic-token W8A8 | 96.04/**96.28** | 77.00/**91.40** | 63.44/**66.88** |
+| All Linear, static-tensor W8A8 | 1.52/**79.40** | 0.00/**75.32** | 2.76/**56.04** |
+| `down_proj` only, static-tensor W8A8 | 2.16/**79.28** | 0.04/**79.08** | 3.40/**56.84** |
+
+Dynamic per-token W8A8 preserves both models, while V-scale retains substantially more retrieval ability under static activation scaling.
+这不是保持，而是baseline在后两种配置中直接崩溃掉了
+The `down_proj`-only result again nearly reproduces all-Linear static quantization. This conditional activation-quantization benefit does not erase the unfavorable W4A16 cases. Together, the results reject a universal advantage while identifying the setting in which V-scale's quantization robustness is most pronounced.
+
+We agree that presenting only the uniformly positive multi-key result in the main text can make its scope appear broader than intended, even though the appendix explicitly describes the single-needle results as mixed and reports all negative cases. We will make these limitations more explicit in the main text, replace the broad statement that V-scale “improves long-context retrieval robustness” with the narrower claim that it consistently improves multi-key retrieval in the evaluated settings.
+
+最重要的是，These mixed downstream interactions constrain the generality of the secondary practical observation, but they do not contradict the paper's central mechanistic evidence linking attention sinks, gradient sinks, and massive activations, or the role of V-scale as a test of that mechanism.
 
 **Reply to Paper Formatting Concerns:**
 
