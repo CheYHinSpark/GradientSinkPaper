@@ -1,5 +1,78 @@
 # Review and Rebuttal
 
+## Meta Review of Submission17495 by Area Chair ttnj
+
+This paper studies the attention-sink and massive-activation phenomena of pretrained Transformer-based LLMs through the lens of backpropagation. The paper shows that under causal masking, attention sinks can induce pronounced gradient concentration, which the authors term gradient sinks, and interpret massive activations as adaptive regulators of that localized gradient pressure. This interpretation predicts that attenuating sink-induced gradients should weaken massive activations, and the authors test that prediction with V-scale, a modification that adjusts the gradients backpropagated along the value path.
+
+**Strengths**
+
+The analysis of the relationship between attention sinks and massive activations provides insight into how LLMs train and operate. The claims are well supported by empirical evidence.
+
+**Weaknesses**
+
+The reviewers raised several questions regarding the clarification of the V-scale, quantization evidence, and revisions to the figures.
+
+Overall, the current meta-review is leaning to accept this paper with the anticipation that the authors will successfully address all the questions raised by the reviewers.
+
+## Overall Response to the Area Chair
+
+We thank the Area Chair and all reviewers for their careful evaluation and constructive feedback.
+
+We are encouraged by the broad agreement on the paper’s central contribution: identifying gradient sinks as a backward-pass counterpart of attention sinks and providing an empirical and theoretical account of massive activations as RMSNorm-mediated regulators of localized gradient pressure. The remaining questions primarily concern the positioning and causal rigor of V-scale, the scope of its quantization evidence, the interpretation of mixed downstream results, and the clarity of the presentation.
+
+We address these questions below.
+
+### Question 1: What is the core novelty of the paper and the role of Section 5?
+
+The core contribution lies in Sections 3–4:
+
+1. Section 3 empirically identifies gradient sinks and shows that the excess gradient at the sink token is concentrated mainly on the key and, especially, value pathways.
+2. Section 3 further shows that MA sites align with RMSNorm-mediated gradient compression, allowing branch-local amplification to coexist with mild changes in residual-stream gradient norms.
+3. Section 4 formalizes this mechanism through exact backward identities and theoretical analysis.
+
+Section 5 is a counterfactual mechanism test, not a claim that V-scale is universally superior. The mechanism predicts that an alternative value-path gradient valve during training should reduce reliance on MA while retaining substantial attention-sink behavior. Downstream evaluations serve mainly as capability controls. We will reposition Section 5 as **“Mechanistic Intervention and Validation,”** separating this evidential role from secondary practical observations.
+
+### Question 2: Does V-scale isolate the proposed backward-pass mechanism?
+
+The original V-scale transformation changes both the forward value state and its backward gradient. To remove this forward-pass confound, we trained an additional model using a backward-only version of V-scale.
+
+The construction leaves the forward value state exactly unchanged, $\hat v=v$, while applying the V-scale Jacobian during backpropagation. The backward-only model remains well trained. Substantial attention-sink behavior remains, although its mean strength is reduced. At the same time, massive activations are strongly suppressed relative to the baseline. This experiment directly removes the forward-contraction explanation.
+
+We will add the backward-only experiments.
+
+### Question 3: What do the results establish about quantization?
+
+We agree that the submitted evidence does not establish universal quantization robustness. BNB, GPTQ, and AWQ are W4A16 and do not quantize runtime activations; SmoothQuant explicitly compensates for activation outliers.
+
+We conducted a controlled W8A8 diagnostic:
+
+1. dynamic per-token activation scaling;
+2. calibrated static per-tensor activation scaling;
+3. static per-tensor activation scaling localized to `mlp.down_proj`.
+
+Dynamic per-token W8A8 leaves both models close to BF16. Under static per-tensor scaling, the baseline degrades sharply while V-scale remains substantially more functional. Applying the same static quantization only to `down_proj` nearly reproduces the all-Linear result. The evidence supports the conditional conclusion that V-scale is less sensitive to coarse activation ranges at the implicated MLP pathway.
+
+We emphasize that static per-tensor quantization is a deliberately range-sensitive diagnostic, not a mainstream deployment recipe.
+
+### Question 4: How should the mixed NIAH and PTQ results be interpreted?
+
+We agree that although V-scale improves every reported multi-key setting, the single-needle results are mixed and include severe degradations in several W4A16/YaRN combinations. We currently do not have sufficient evidence to identify the cause of these interactions. We will therefore avoid claiming universal long-context or quantization improvement and explicitly state that the W4A16/YaRN interaction remains unresolved.
+
+These mixed downstream results constrain a secondary practical observation. They do not contradict the empirical and theoretical mechanism in Sections 3–4 or the role of Section 5 as an intervention that tests its counterfactual prediction.
+
+### Question 5: How will the presentation be improved?
+
+We will make the following revisions:
+
+1. Rename and reposition Section 5 as “Mechanistic Intervention and Validation.”
+2. Add a computational schematic showing the gradient sites compared by Bloat, Change, and Compress.
+3. Explain the intuitive meanings of these quantities.
+4. Add an overview figure summarizing the complete mechanism.
+5. Bold the best results in all comparison tables.
+6. Explicitly discuss the limitations and mixed long-context results.
+
+We thank the reviewers again for helping us clarify the contribution hierarchy, strengthen the causal evidence, narrow the practical claims, and improve the presentation.
+
 ## Official Review of Submission17495 by Reviewer gq1u
 
 **Summary:**
