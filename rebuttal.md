@@ -55,17 +55,17 @@ We will revise the organization and wording of Section 5 accordingly. In particu
 
 Thank you for raising this distinction. We acknowledge that the current presentation (e.g., L214) could be read as making a stronger claim than intended. Our original evidence establishes that V-scale attains higher multi-key retrieval accuracy under the evaluated PTQ settings. It does not establish smaller quantization degradation. We will revise this wording to describe quantization as a potential, conditional implication rather than a universal advantage of V-scale.
 
-The PTQ methods in the submission also probe different effects. BNB, GPTQ, and AWQ are W4A16 settings and therefore do not quantize runtime activations, so reducing massive activations is not expected to automatically improve them. SmoothQuant is a W8A8 method, but it explicitly compensates for activation outliers. Moreover, its INT8 activation quantization is applied to Linear inputs rather than directly to the residual-stream activations where MA is measured. Therefore, the submitted experiments showing downstream behavior under these PTQ methods are not a direct test of sensitivity to the residual-stream activation range.
+The PTQ methods in the submission also probe different effects. BNB, GPTQ, and AWQ are W4A16 settings and therefore do not quantize runtime activations, so reducing massive activations is not expected to automatically improve them. SmoothQuant is a W8A8 method, but it explicitly compensates for activation outliers. Moreover, its INT8 activation quantization is applied to Linear inputs rather than directly to the residual-stream activations at which MA is measured. Therefore, the submitted experiments showing downstream behavior under these PTQ methods are not a direct test of sensitivity to the residual-stream activation range.
 
-To test activation-range sensitivity more directly, we added INT8 experiments with three configurations:
+To test that narrower implication directly, we did a deliberately simple activation-range stress test. This is not intended as a competitive deployment quantizer. We compare three symmetric INT8 configurations:
 
-- W8A8 with static per-channel weights and dynamic per-token activations over all Linear layers;
-- the same per-channel weights with calibrated static per-tensor activations over all Linear layers;
-- a localized setting that applies the second W8A8 scheme only to `mlp.down_proj`, leaving all other modules unquantized.
+1. **All-Linear dynamic-token W8A8.** All `Linear` modules except `lm_head` use static per-channel INT8 weights and dynamic per-token INT8 input activations.
+2. **All-Linear static-tensor W8A8.** The target modules and weight format are unchanged, while input activations use a calibrated static per-tensor INT8 scale. The static quantizers use MinMax observers.
+3. **`down_proj`-only static-tensor W8A8.** The same static per-channel weight and static per-tensor activation formats are applied only to modules matching `mlp.down_proj`; all other modules remain unquantized.
 
 The first two settings use the same weight format and differ only in the activation-scaling policy. Dynamic per-token scaling provides a less range-sensitive control, whereas a calibrated per-tensor scale is shared across tokens and therefore deliberately exposes sensitivity to token-wise activation outliers. The last localized setting quantizes the SwiGLU intermediate passed to the down projection, whose output is the MLP site where we observe the strongest reduction of massive activations.
 
-The results below report Baseline/V-scale pairs on standard LM-eval tasks. Lower perplexity and higher accuracy are better; mean accuracy is the unweighted average over the ten accuracy metrics reported in Table 4, Appendix C.4.
+The results below report Baseline/V-scale pairs on LM-eval tasks. Lower perplexity and higher accuracy are better. Mean accuracy is the unweighted average over the ten accuracy metrics reported in Table 4, Appendix C.4.
 
 | Setting | WikiText PPL(↓) | LAMBADA PPL(↓) | Mean accuracy(↑) |
 | --- | ---: | ---: | ---: |
@@ -74,15 +74,15 @@ The results below report Baseline/V-scale pairs on standard LM-eval tasks. Lower
 | All Linear, static-tensor W8A8 | 33.55/**25.46** | 46.85/**23.65** | 48.54/**50.55** |
 | `down_proj` only, static-tensor W8A8 | 32.94/**25.21** | 43.63/**23.07** | 48.37/**50.67** |
 
-Dynamic per-token W8A8 leaves both models close to BF16. Under all-Linear static-tensor W8A8, however, V-scale exhibits substantial advantages. Quantizing only `down_proj` nearly reproduces the all-Linear static result, showing that this single pathway is sufficient to induce most of the observed sensitivity. The corresponding NIAH results are reported in our reply to Weakness 3.
+Dynamic per-token W8A8 leaves both models close to BF16. When only the activation policy is changed from dynamic per-token to calibrated static per-tensor scaling, however, V-scale exhibits substantial advantages. Quantizing only `down_proj` nearly reproduces the all-Linear static result, showing that this single pathway is sufficient to induce most of the observed sensitivity. The corresponding NIAH results are reported in our reply to Weakness 3.
 
-We emphasize the scope of this evidence. The localized static scheme is a controlled range-sensitivity diagnostic, not a proposed deployment recipe, and it quantizes the input to `down_proj` rather than the residual stream itself. It supports the conditional conclusion that V-scale is less sensitive when coarse activation quantization is applied to the MLP pathway associated with its strongest MA reduction, but it does not establish universal quantization robustness.
+We emphasize the scope of this evidence. The static per-tensor configuration is intentionally a controlled range-sensitivity diagnostic, not a proposed mainstream deployment recipe. It supports the conditional conclusion that V-scale is less sensitive when a coarse activation quantization is applied to the MLP pathway associated with its strongest MA reduction, but it does not establish universal quantization robustness.
 
 **Reply to Weakness 3:**
 
 We agree that the degradations highlighted by the reviewer are substantial. We do not regard these differences as noise, nor do we claim that V-scale is uniformly compatible with every quantization and long-context setting.
 
-These severe cases are nevertheless localized rather than evidence that the quantized V-scale model fails across NIAH. V-scale improves every reported multi-key setting. Thus, these mixed results reveal a task- and context-dependent interaction, not a uniform benefit or failure. We do not currently have evidence that identifies its cause.
+These severe cases are nevertheless localized. V-scale improves every reported multi-key setting. Thus, these mixed results reveal a task- and context-dependent interaction, not a uniform benefit or failure. We do not currently have evidence that identifies its cause.
 
 We used the same diagnostic W8A8 configurations described in Reply 2 and evaluated all three NIAH variants at the native 2048-token context length (Baseline/V-scale):
 
@@ -95,7 +95,7 @@ We used the same diagnostic W8A8 configurations described in Reply 2 and evaluat
 
 Dynamic per-token W8A8 does not cause either model to collapse. Under calibrated static-tensor activation quantization, however, the baseline collapses to near-zero accuracy on all three tasks, whereas V-scale remains functional. Applying the same static quantization only to `down_proj` reproduces this sharp contrast almost completely. Thus, this is a qualitative difference in fragility to a fixed activation range at the mechanistically implicated MLP pathway.
 
-These activation-quantization results do not erase or explain the unfavorable W4A16/YaRN cases; the two evaluations probe different effects. We agree that presenting only the uniformly positive multi-key result in the main text can make the practical claim appear broader than intended, even though the appendix describes the single-needle results as mixed and reports the negative cases. We will make those limitations visible in the main text and replace the broad statement that V-scale “improves long-context retrieval robustness” with more precise observations that it consistently improves multi-key retrieval in the evaluated settings.
+These activation-quantization results do not erase or explain the unfavorable W4A16/YaRN cases. We agree that presenting only the uniformly positive multi-key result in the main text can make the practical claim appear broader than intended, even though the appendix describes the single-needle results as mixed and reports the negative cases. We will make those limitations visible in the main text and replace the broad statement with more precise observations.
 
 Most importantly, these mixed downstream interactions constrain the generality of a secondary practical observation. They do not contradict the paper's central mechanistic evidence linking attention sinks, gradient sinks, and massive activations, or the role of V-scale as an intervention that tests that mechanism.
 
