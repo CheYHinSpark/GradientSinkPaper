@@ -49,7 +49,7 @@ The primary purpose of downstream results is to rule out trivial explanations of
 
 We also agree that V-scale must be introduced during pretraining and is therefore costly to verify. This training-time intervention is nevertheless necessary for the specific test above because our hypothesis concerns why massive activations emerge during optimization. A post-hoc modification of an already trained checkpoint cannot test whether relieving sink-induced gradient pressure during learning reduces the emergence of massive activations. Thus, the matched from-scratch runs should not be interpreted as a recommendation that practitioners replace existing pretrained models.
 
-We will revise the organization and wording of Section 5 accordingly. In particular, we will retitle it as "Casual Intervention/Mechanism Intervention", and explicitly state that the practical observations are secondary to V-scale’s evidential role.
+We will revise the organization and wording of Section 5 accordingly. In particular, we will retitle it as "Causual Intervention/Mechanism Intervention", and explicitly state that the practical observations are secondary to V-scale’s evidential role.
 
 **Reply to Weakness 2:**
 
@@ -57,7 +57,7 @@ Thank you for raising this distinction. We acknowledge that the current presenta
 
 The PTQ methods in the submission also probe different effects. BNB, GPTQ, and AWQ are W4A16 settings and therefore do not quantize runtime activations, so reducing massive activations is not expected to automatically improve them. SmoothQuant is a W8A8 method, but it explicitly compensates for activation outliers. Moreover, its INT8 activation quantization is applied to Linear inputs rather than directly to the residual-stream activations at which MA is measured. Therefore, the submitted experiments showing downstream behavior under these PTQ methods are not a direct test of sensitivity to the residual-stream activation range.
 
-To test that narrower implication directly, we did a deliberately simple activation-range stress test. This is not intended as a competitive deployment quantizer. We compare three symmetric INT8 configurations:
+To test that narrower implication, we did a deliberately simple activation-range stress test. This is not intended as a competitive deployment quantizer. We compare three symmetric INT8 configurations:
 
 1. **All-Linear dynamic-token W8A8.** All `Linear` modules except `lm_head` use static per-channel INT8 weights and dynamic per-token INT8 input activations.
 2. **All-Linear static-tensor W8A8.** The target modules and weight format are unchanged, while input activations use a calibrated static per-tensor INT8 scale. The static quantizers use MinMax observers.
