@@ -1,89 +1,75 @@
-# OpenReview Responses
+# Attention Sinks Induce Gradient Sinks: Massive Activations as Gradient Regulators in Transformers
 
-## 1. Overall response to the meta-review
+Yihong Chen, Zhouchen Lin, Quanming Yao
 
-We thank the Area Chair and all reviewers for their careful evaluation and constructive feedback.
+NeurIPS 2026 poster
 
-We are encouraged by the broad agreement on the paper’s central contribution: identifying gradient sinks as a backward-pass counterpart of attention sinks and providing an empirical and theoretical account of massive activations as RMSNorm-mediated regulators of localized gradient pressure. The remaining questions primarily concern Section 5—namely, the positioning and causal rigor of V-scale, the scope of its quantization evidence, the interpretation of mixed downstream results, and the clarity of the presentation.
+**Abstract:**
 
-We address these questions below.
+Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. Existing explanations have largely focused on the forward pass, yet in pre-norm Transformers, large residual-stream norms play only an indirect forward role because sublayers operate on normalized inputs. We study this relationship from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term gradient sinks. Since the RMSNorm Jacobian attenuates gradients roughly in inverse proportion to input norm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training. This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results identify gradient sinks as a backward-pass counterpart of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at https://anonymous.4open.science/r/GradientSinkCode-B309.
 
-### Question 1: What is the core novelty of the paper, and what is the role of Section 5?
+## Paper Decision
 
-We would first like to clarify the contribution hierarchy.
+**Decision:** Accept (poster)
 
-The core novelty lies in Sections 3–4:
+**Metareview:**
 
-1. Section 3 empirically identifies gradient sinks and shows that the excess gradient at the sink token is concentrated mainly on the key and, especially, value pathways.
-2. Section 3 further shows that massive-activation sites align with strong RMSNorm-mediated gradient compression, allowing severe branch-local amplification to coexist with relatively mild changes in residual-stream gradient norms.
-3. Section 4 formalizes this mechanism through exact backward identities and theoretical analysis. Attention weights aggregate value-path gradients toward sink tokens, while the RMSNorm Jacobian makes activation scale an effective local gradient-attenuation factor.
+This paper studies the attention-sink and massive-activation phenomena of pretrained Transformer-based LLMs through the lens of backpropagation. The paper shows that under causal masking, attention sinks can induce pronounced gradient concentration, which the authors term gradient sinks, and interpret massive activations as adaptive regulators of that localized gradient pressure. This interpretation predicts that attenuating sink-induced gradients should weaken massive activations, and the authors test that prediction with V-scale, a modification that adjusts the gradients backpropagated along the value path.
 
-Section 5 is not intended to introduce V-scale primarily as a universally superior practical architecture. Its primary role is to test a counterfactual prediction derived from the mechanism:
+- Strengths
 
-> If massive activations emerge partly in response to sink-induced gradient pressure, then providing an alternative value-path gradient valve during training should reduce the model’s reliance on massive activations while retaining substantial attention-sink behavior.
+The analysis of the relationship between attention sinks and massive activations provides insight into how LLMs train and operate. The claims are well supported by empirical evidence.
 
-We recognize that the title “Practical Application” and the emphasis on downstream and quantization results may have caused V-scale to be interpreted mainly as a practical method contribution. We do not claim that V-scale is a general-purpose replacement for standard Transformers. We will revise the title and organization of Section 5 to present it as “Mechanistic Intervention and Validation” and explicitly separate:
+- Weaknesses
 
-- the primary evidential role of V-scale;
-- the capability-control experiments;
-- the secondary and conditional practical observations.
+The reviewers raised several questions regarding the clarification of the V-scale, quantization evidence, and revisions to the figures.
 
-### Question 2: Does V-scale isolate the proposed backward-pass mechanism?
+Overall, the initial meta-review is leaning to accept this paper with the anticipation that the authors will successfully address all the questions raised by the reviewers.
 
-The original V-scale transformation changes both the forward value state and its backward gradient. To remove this forward-pass confound, we trained an additional model using a backward-only version of V-scale.
+**Final Justification:**
 
-The construction leaves the forward value state exactly unchanged, $\hat v=v$, while applying the V-scale Jacobian during backpropagation. The backward-only model remains well trained. Substantial attention-sink behavior remains, although its mean strength is reduced. At the same time, massive activations are strongly suppressed relative to the baseline.
-
-This experiment directly removes the forward-contraction explanation. It shows that changing only the value-path backward rule is sufficient to produce the predicted suppression of massive activations.
-
-We will add the backward-only construction, its exact forward/backward identities, the comparison results, and the full layer-wise measurements.
-
-### Question 3: What do the results establish about quantization?
-
-We agree that the original wording could be interpreted as making a broader quantization claim than the submitted evidence supports.
-
-BNB, GPTQ, and AWQ are W4A16 settings and therefore do not quantize runtime activations. They are not direct tests of whether reducing residual-stream massive activations improves activation quantization. SmoothQuant uses activation quantization but also explicitly compensates for activation outliers and applies quantization at Linear inputs rather than directly at the residual-stream sites where massive activations are measured.
-
-To test the narrower activation-range implication, we conducted a controlled W8A8 diagnostic:
-
-1. dynamic per-token activation scaling;
-2. calibrated static per-tensor activation scaling;
-3. static per-tensor activation scaling localized to `mlp.down_proj`.
-
-Dynamic per-token W8A8 leaves both models close to BF16. Under static per-tensor scaling, however, the baseline degrades sharply while V-scale remains substantially more functional. Applying the same static quantization only to `down_proj` nearly reproduces the all-Linear result, connecting the sensitivity to the MLP pathway where V-scale produces its strongest reduction of massive activations.
-
-We emphasize that static per-tensor quantization is a deliberately range-sensitive diagnostic, not a proposed mainstream deployment recipe. The evidence supports the conditional conclusion that V-scale is less sensitive to coarse activation ranges at the implicated MLP pathway. It does not establish universal quantization robustness.
-
-### Question 4: How should the mixed NIAH and PTQ results be interpreted?
-
-We agree that the unfavorable AWQ/GPTQ/YaRN cases in the single-needle experiments are substantial. We do not regard them as noise, and we do not claim that V-scale uniformly improves every quantization method, retrieval task, or context-extension setting.
-
-V-scale improves every reported multi-key setting, but the single-needle results are mixed and include severe degradations in several W4A16/YaRN combinations. We currently do not have sufficient evidence to identify the cause of these interactions. We will therefore avoid claiming universal long-context or quantization improvement and explicitly state that the W4A16/YaRN interaction remains unresolved.
-
-These mixed downstream results constrain a secondary practical observation. They do not contradict the empirical and theoretical mechanism in Sections 3–4 or the role of Section 5 as an intervention that tests its counterfactual prediction.
-
-### Question 5: How will the presentation be improved?
-
-We will make the following revisions:
-
-1. Rename and reposition Section 5 as “Mechanistic Intervention and Validation.”
-2. Add a computational schematic showing the gradient sites compared by Bloat, Change, and Compress.
-3. Explain the intuitive meanings of these quantities before presenting their formal definitions.
-4. Add an overview figure summarizing the complete mechanism:
-   attention sink
-   $\rightarrow$ value-path gradient aggregation
-   $\rightarrow$ localized gradient pressure
-   $\rightarrow$ RMSNorm-mediated compression through massive activations
-   $\rightarrow$ mild residual-stream gradient change.
-5. Show V-scale in the same figure as an alternative gradient valve.
-6. Bold the best results in all comparison tables.
-7. Explicitly discuss the limitations and mixed long-context results.
-
-We thank the reviewers again for helping us clarify the contribution hierarchy, strengthen the causal evidence, narrow the practical claims, and improve the presentation.
+The reviewers raised several questions regarding the clarification of the V-scale and the quantization evidence, and requested that the figures be revised. During the author-reviewer discussion phase, all reviewers were satisfied with the rebuttal and maintained their stance in favor of accepting the paper. After reading the reviews, rebuttal, and discussions, the AC recommends accepting this paper.
 
 ---
 
-## 2. Response to Reviewer gq1u
+## Official Review of Submission17495 by Reviewer gq1u
+
+**Summary:**
+
+This paper studies the phenomena of attention sinks and large activations in large pretrained transformer-based LLMs, through the lens of backpropagation. Specifically the authors identify large gradient concentrations induced by attention sinks (gradient sinks) and their relationship to massive activations.
+
+The paper presents an empirical and theoretical study of the relationship between these three phenomena, by demonstrating that massive activations act as local adaptive regulators of the gradient sinks, thus preserving training stability.
+
+This theoretical analysis leads to the derivation of V-scale, a reparameterization of attention values that adaptively scales attention values, by preserving attention sinks, while attenuating large gradients that correspond to small values.
+
+Evaluation shows comparable performance on downstream tasks for 1B LLMs trained with V-scale (no quantization), while demonstrating superior performance in the Needle-in-the-haystack retrieval setting under quantization.
+
+**Strengths**
+
+- The analysis of training dynamics and their relationship to the phenomena of attention sinks and massive activations can provide insights into LLM operation.
+- The theoretical and empirical setting is realistic, taking into account modern transformer architecture design (Prenorm, RoPE, Billion-scale models).
+- The paper is well-written and intuition is clearly presented.
+
+**Weaknesses**
+
+- The proposed V-scale reparameterization leads to comparable performance on downstream LM tasks, with some benchmarks improving and some benchmarks showing reduced performance. Since in Section 3.2 the papers states that gradient sinks do not impact training stability, and the baseline transformer architecture already regulates them, is this intervention necessary, or is this a solution asking for a problem?
+    - This point is very relevant in the reviewer's opinion, since the proposed V-scale modification is applied at the pre-training stage, thus verification is costly and requires strong evidence for potential benefits.
+- The most promising benefit of this modification is the quantization aspect. Massive activations can hurt quantization performance, thus their mitigation may help quantized model performance. This is a direct claim made in the paper (L214). However this claim is not verified in Table 4, appendix C.4, and direct comparison for this claim is pushed to the Appendix.
+- Regarding the evaluation for the Needle-in-the-haystack problem improvements are more clear, however looking again in the appendix C.4 there are some settings where V-scale is catastrophic (e.g., AWQ / GPTQ quantization, C.4 Table 5 and 6)
+
+Overall, the analysis of gradient sink phenomena in this paper is a valuable contribution, however the proposed V-scale approach and subsequent evaluation brings into question the benefits of this intervention. The reviewer is hesitant to raise concerns about results presented in the Appendix, however I believe they are directly related to claims made in the main paper text.
+
+**Rating:** 4.
+
+**Confidence**: 3.
+
+**Paper Formatting Concerns:** Please format the best results in each table in bold. This will significantly improve readability.
+
+**Final Justification:**
+
+The authors have sufficiently supported that the main contribution of this paper is the theoretical analysis and agreed to qualify some weakly supported claims about the practical application. I am raising my score.
+
+### Rebuttal by Authors
 
 We thank the reviewer for recognizing the value of the training-dynamics analysis, the realism of the empirical and theoretical setting, and the clarity of the presentation.
 
@@ -93,7 +79,7 @@ The main contribution of the paper lies in Sections 3–4: we identify gradient 
 
 We recognize that the title “Practical Application” and the emphasis on quantization (e.g., L214) may have made the secondary practical role appear to be the primary contribution. We will revise this positioning.
 
-### Question 1: Given the mixed downstream results and the cost of modifying pretraining, what is the usefulness of V-scale?
+#### Question 1: Given the mixed downstream results and the cost of modifying pretraining, what is the usefulness of V-scale?
 
 We agree that V-scale is not necessary for the stable training of standard Transformers, and we do not recommend it as a general-purpose replacement for existing architectures.
 
@@ -122,7 +108,7 @@ The training-time intervention is necessary for the scientific question being te
 
 We also conducted a backward-only control in response to another reviewer (see our response to Reviewer 6L5L, Q1). It leaves the forward values unchanged while applying the V-scale gradient rule. This model remains well trained and strongly suppresses massive activations, further strengthening the interpretation of Section 5 as mechanistic validation.
 
-### Question 2: Does the paper adequately verify a quantization benefit?
+#### Question 2: Does the paper adequately verify a quantization benefit?
 
 Thank you for raising this distinction. We agree that the original wording could be read as making a broader claim than the evidence supports.
 
@@ -130,7 +116,7 @@ The submitted PTQ methods probe different effects. BNB, GPTQ, and AWQ are W4A16 
 
 To test this narrower implication, we conducted a controlled activation-range diagnostic using three symmetric INT8 configurations:
 
-1. **All-Linear dynamic-token W8A8.** All `Linear` modules except `lm_head` use static per-channel INT8 weights and dynamic per-token INT8 input activations.
+1. **All-Linear dynamic-token W8A8.** All `Linear` modules except lm_head use static per-channel INT8 weights and dynamic per-token INT8 input activations.
 2. **All-Linear static-tensor W8A8.** The target modules and weight format are unchanged, while activations use a calibrated static per-tensor INT8 scale with MinMax observers.
 3. **`down_proj`-only static-tensor W8A8.** The same static per-channel weight and static per-tensor activation formats are applied only to modules matching `mlp.down_proj`.
 
@@ -151,7 +137,7 @@ We emphasize the scope of this evidence. Static per-tensor quantization is inten
 
 We will revise the wording in Section 5 to describe quantization as a potential and conditional implication rather than a general benefit.
 
-### Question 3: How should the severe degradations in some AWQ/GPTQ and NIAH settings be interpreted?
+#### Question 3: How should the severe degradations in some AWQ/GPTQ and NIAH settings be interpreted?
 
 We agree that the degradations highlighted by the reviewer are substantial. We do not regard them as noise, and we do not claim that V-scale is uniformly compatible with every quantization method, retrieval task, and context-extension setting.
 
@@ -179,19 +165,58 @@ We will therefore:
 
 These mixed downstream findings constrain the generality of a secondary practical observation, but do not challenge the core empirical and theoretical contribution in Sections 3–4 or the evidential role of Section 5 as a counterfactual intervention.
 
-### Formatting concern
+#### Formatting concern
 
 We agree with the reviewer’s suggestion and will bold the best result in each table.
 
 We thank the reviewer again for prompting us to clarify the contribution hierarchy, reposition Section 5, add a more direct activation-range diagnostic, and narrow the practical claims.
 
+### Official Comment by Reviewer gq1u
+
+I thank the authors for their clarifications and agree about the main contribution of this paper is the theoretical analysis. I hope the qualifications about the practical claims are included in the camera ready. I am inclined to raise my score.
+
+### Replying to Official Comment by Reviewer gq1u
+
+Thank you very much for considering our response and updating your score. We will ensure that the practical claims are appropriately qualified in the revision.
+
 ---
 
-## 3. Response to Reviewer pqQy
+## Official Review of Submission17495 by Reviewer pqQy
+
+**Summary:**
+
+The authors present an empirical and theoretical analysis of the coupling between massive activations and attention sinks from a new perspective, i.e., the backward pass. Specifically, the study shows how attention sinks under causal attention masking lead to gradient concentrations that they term gradient sinks. Then, they provide an interpretation of massive activations as regulators of gradient sinks and verify this via their bespoke intervention V-scale, towards strong reduction in massive activations. While performance improvement is not the goal of the paper, V-scale does add notable improvements in recall performance.
+
+**Strengths**
+
+Notation is clear and easy to understand
+The analysis for how massive activations align with changes in gradient is clearly explained and motivates their theoretical investigation for massive activations as gradient regulators.
+
+Theorems are presented concisely yet explained clearly.
+
+Practical takeaway towards V-scale is motivated well and overall, the empirical evidence is consistent with the paper’s claims and the present theory motivates their proposed intervention well. The authors do not overclaim their intervention to provide superior language modelling per-se, yet the efficacy of more control over massive activations in V-scale is verified via NIAH tasks.
+
+**Weaknesses**
+
+I did not identify any major methodological or experimental weaknesses. Evidence is correctly inferred and supports the paper's claims.
+
+**Questions:**
+
+One minor suggestion for strengthening the work would be to include a discussion on the strong improvement in ARC-C and BoolQ, both of which require skills of reasoning-based inference from context. Could there be a coupling of these skills with NIAH that could explain the benefits of V-scale more? Note that this suggestion does not impact my score.
+
+**Rating:** 5.
+
+**Confidence:** 4.
+
+**Final Justification:**
+
+I maintain my score of 5, following the authors thorough answer to the question I had raised.
+
+### Rebuttal by Authors
 
 We thank the reviewer for the positive assessment and for the insightful suggestion concerning ARC-C, BoolQ, and multi-key NIAH.
 
-### Question 1: Could the gains on ARC-C and BoolQ be connected to the improvements on multi-key NIAH?
+#### Question 1: Could the gains on ARC-C and BoolQ be connected to the improvements on multi-key NIAH?
 
 A plausible commonality is query-conditioned selection and routing of relevant information under competing cues. Indeed, V-scale exhibit stronger gains on tasks where selective routing or retrieval may be particularly important, rather than improve all benchmarks uniformly.
 
@@ -207,13 +232,63 @@ We will add a concise discussion of this possible connection while clearly prese
 
 We thank the reviewer again for suggesting this useful interpretation.
 
+### Official Comment by Reviewer pqQy
+
+I thank the authors for their detailed answer and their careful consideration of my question while remaining fixed in the scope of the paper's results.
+
+### Replying to Official Comment by Reviewer pqQy
+
+Thank you very much for engaging in the discussion. We will include this possible interpretation in the revision.
+
 ---
 
-## 4. Response to Reviewer 6L5L
+## Official Review of Submission17495 by Reviewer 6L5L
+
+**Summary:**
+
+This paper provides a mechanistic account for the co-existence of attention sinks (AS) and massive activations (MA). The author establishes a rather intriguing mental image: the attention sink results in a large gradient norm on the $v$ activation at the sink token position, which entails a large pre-norm residual activation to alleviate the gradient magnitude. Such an account is corroborated with empirical measurements, mathematical modeling, and causal intervention. The V-scaling serves both as a causal intervention to test their hypothesis and as a model add-on with practical value, particularly for quantization.
+
+**Strengths**
+
+(1) The story is quite compelling. The authors provide comprehensive empirical observations and mathematical explanations. Overall, the logic is sound, and it complements the previous understanding of attention sink from the perspective of the forward pass.
+
+(2) The presentation is well-organized and neat. Although the story's complexity makes reading a bit involved, I think I get the gist of it with no problem.
+
+**Weakness**
+
+(1) The paper could use more pictorial illustrations to clarify the main points, which I will get to in the questions.
+
+(2) The causal intervention of V-scale is slightly flawed in logic. I will also discuss this in the questions. Nonetheless, I believe its contribution as a practical model gadget to facilitate quantization still holds up well.
+
+**Questions:**
+
+(1) Regarding the intervention experiments. I think it is not completely rigorous. It is also admitted in the paper. The $\phi$ function modulates not only the backward gradient but also the forward value for small activation tokens. Thus, one might suspect whether it is this effect on the forward pass that mitigates the MA. I would suggest the following experiments. You may choose either one to conduct:
+
+i) Write a hook function to modify only the backward gradient norm of v to see if it is really this factor that affects MA. Do it for either one layer or all the layers. In this case, the training loss might not decrease as quickly, or it might simply result in divergence. But I think it is a good way to see how the input residual norm reacts to changing only the backward gradient norm of v.
+
+ii) Run a PC algorithm (for a conditional independence test) to see if AS and $\|h^l\|$ are independent conditioned on $\|\nabla_{v_s}\mathcal{L}\|$ at the sink token position. This is a non-interventional way to check the causal link you established.
+
+Overall, I am still impressed by the practical value of your current intervention.
+
+(2) I found it a bit hard to follow when I read the definition of Bloat/Change/Compress. I get the ideas behind the naming in the subsequent visualization section, but I was completely lost when I first read these names. Maybe it is better to mention that the intention behind these names will be clarified later. More importantly, I think it will greatly improve the clarity of the presentation if you can have a pictorial illustration of Bloat/Change/Compress. You simply need to create a plot showing the computation flow you defined under line 71, and the gradients of the two points being compared in that flow. For example, Compress, I believe, is the comparison before and after the RMS norm.
+
+(3) I think it is better, again, to use a pictorial graph to summarize the logic you are presenting in Sections 4 and 5. To me, it is AS -> large gradient on v -> calls for large residual activation (MA) to reduce the gradient norm. This will make it much easier to follow.
+
+At this point, I am leaning toward accepting this paper. Though I believe addressing my first question may greatly improve the rigor of the script.
+
+**Rating:** 5.
+
+**Confidence:** 4.
+
+**Final Justification:**
+
+The authors adequately addressed my concerns. I particularly value their new causal experiments to eliminate the forward-pass confounder. I suggest Accept for this paper.
+
+### Rebuttal by Authors
 
 We thank the reviewer for the careful reading, encouraging assessment, and concrete suggestions for strengthening both the causal evidence and the presentation. We answer each question explicitly below.
 
-### Question 1: Since V-scale changes both the backward gradient and the forward value states, how can the paper establish that backward gradient modulation is responsible for suppressing massive activations?
+#### Question 1: Since V-scale changes both the backward gradient and the forward value states, how can the paper establish that backward gradient modulation is responsible for suppressing massive activations?
 
 We agree that the original full V-scale intervention contains a forward-pass confound. To directly address it, we followed the reviewer’s suggested option (i) and trained a model with a backward-only version of V-scale.
 
@@ -271,7 +346,7 @@ This result does not imply that the forward component of full V-scale has no add
 
 We will add the backward-only construction, its exact forward/backward identities, the comparison table or figure, and the full layer-wise measurements.
 
-### Question 2: Can Bloat, Change, and Compress be explained more clearly with a pictorial illustration?
+#### Question 2: Can Bloat, Change, and Compress be explained more clearly with a pictorial illustration?
 
 We agree. Presenting the names before explaining the computational intuition makes the definitions unnecessarily difficult to follow.
 
@@ -299,7 +374,7 @@ The definitions for the MLP branch are directly analogous.
 
 We will add a formal schematic that marks $g_1$, $g_2$, and $g_3$ on the computational graph and explain these interpretations before presenting the equations.
 
-### Question 3: Can the paper include an overview figure summarizing the complete logic of Sections 3–5?
+#### Question 3: Can the paper include an overview figure summarizing the complete logic of Sections 3–5?
 
 We agree, and the reviewer’s summary captures the central logic well. We will add an overview schematic before the detailed theory and intervention:
 
@@ -345,3 +420,11 @@ This figure will connect the empirical observations, theoretical results, and in
 We will place this overview before the detailed derivations so that readers have the complete conceptual structure before encountering the individual measurements and theorems.
 
 We thank the reviewer again. The suggested backward-only experiment provides a substantially stronger causal control, and the proposed figures will materially improve the accessibility of the paper.
+
+### Official Comment by Reviewer 6L5L
+
+I thank the author for their rather detailed answer. I am quite convinced by the added intervention experiment and believe that it substantially improves the logic soundness of the paper. I will raise my score to 5.
+
+### Replying to Official Comment by Reviewer 6L5L
+
+Thank you very much for your valuable suggestions and for updating your score. We will incorporate the changes into the revision.
