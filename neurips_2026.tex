@@ -45,9 +45,15 @@
 
 \title{Attention Sinks Induce Gradient Sinks: Massive Activations as Gradient Regulators in Transformers}
 \author{
-    Yihong Chen$^1$\qquad Zhouchen Lin$^2$\thanks{Co-corresponding authors.}\qquad Quanming Yao$^1$\footnotemark[1] \\
-    $^1$Tsinghua University\qquad $^2$Peking University\\
-    \texttt{chenyihong@tsinghua.edu.cn}\quad \texttt{zlin@pku.edu.cn}\quad \texttt{qyaoaa@tsinghua.edu.cn} \\
+    Yihong Chen$^1$\qquad Zhouchen Lin$^2$\thanks{Co-corresponding authors.}\qquad Quanming Yao$^{1,3,4}$\footnotemark[1] \\
+    $^1$Tsinghua University
+    \qquad 
+    $^2$Peking University\\
+    $^3$State Key Laboratory of Space Network and Communications \\
+    $^4$Beijing National Research Center for Information Science and Technology \\
+    \texttt{chenyihong@tsinghua.edu.cn}, 
+    \quad \texttt{zlin@pku.edu.cn},
+    \quad \texttt{qyaoaa@tsinghua.edu.cn} \\
     % Yihong Chen \\
     % Department of Electronic Engineering\\
     % Tsinghua University\\
@@ -76,13 +82,15 @@
 Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. 
 Existing explanations have largely focused on the forward pass, yet in pre-norm Transformers, large residual-stream norms play only an indirect forward role because sublayers operate on normalized inputs.
 We study this relationship from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. Since the RMSNorm Jacobian attenuates gradients roughly in inverse proportion to input norm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training.
-This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results identify gradient sinks as a backward-pass counterpart of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at \href{https://github.com/CheYHinSpark/GradientSinkPaper}{https://github.com/CheYHinSpark/GradientSinkPaper}.
+This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results identify gradient sinks as a backward-pass counterpart of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at
+\footnote{+qm+ make a code here} 
+\href{https://github.com/LARS-research/GradientSink}{https://github.com/LARS-research/GradientSink}.
 \end{abstract}
 
 \section{Introduction}
 
 Two prominent and frequently co-occurring phenomena in Transformer-based large language models (LLMs) are \emph{attention sinks} (AS), where a small number of tokens attract disproportionate attention mass~\cite{xiao2024streamingllm,gu2025when}, and \emph{massive activations} (MA), where activations become unusually large on a small set of tokens and features~\cite{bondarenko2023quantizable,sun2024massive,an2025systematic}. 
-These phenomena are predominantly observed at the first token and are of significant practical importance for long-context inference~\cite{xiao2024streamingllm,su2025kvsink}, fine-tuning~\cite{liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}, and quantization~\cite{xiao2023smoothquant,bondarenko2023quantizable}. Their frequent co-occurrence has also attracted mechanistic interest. Existing work has provided several forward-pass explanations for why AS and MA may arise or persist. For example, AS has commonly been explained as a way to implement ``no-op'' attention heads that contribute little to the current token~\cite{gu2025when,barbero2025why,guo2025activedormant} under the sum-to-one constraint of the softmax operator, while MA has been described as helping form attention-sink behavior~\cite{sun2024massive,su2026unveiling,queipo-de-llano2026attention}.
+These phenomena are predominantly observed at the first token and are of significant practical importance for long-context inference~\cite{xiao2024streamingllm,su2025kvsink}, fine-tuning~\cite{liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}, and quantization~\cite{xiao2023smoothquant,bondarenko2023quantizable}. Analyses of low-precision FlashAttention further show that numerical errors in attention can interact with gradient dynamics and destabilize training~\cite{qiu2026flash}, motivating closer examination of the backward-pass behavior of attention. The frequent co-occurrence of AS and MA has also attracted mechanistic interest. Existing work has provided several forward-pass explanations for why AS and MA may arise or persist. For example, AS has commonly been explained as a way to implement ``no-op'' attention heads that contribute little to the current token~\cite{gu2025when,barbero2025why,guo2025activedormant} under the sum-to-one constraint of the softmax operator, while MA has been described as helping form attention-sink behavior~\cite{sun2024massive,su2026unveiling,queipo-de-llano2026attention}.
 
 However, these forward-pass accounts leave an important training-time aspect less fully explained. In modern pre-norm architectures, both attention and MLP sublayers operate on normalized inputs~\cite{zhang2019rmsnorm,xiong2020layernorm,touvron2023llama}. Locally, the forward attention computation depends much more strongly on the direction of the representation than on its raw norm. This makes the emergence of MA appear difficult to explain from a purely forward-pass perspective. Moreover, many interventions in the literature modify trained models post hoc by editing MLP outputs or token activations and observing joint changes in AS and MA. While informative, such interventions often perturb both magnitude and direction at the same time, making it difficult to isolate the causal mechanism linking these phenomena. Recent studies of training dynamics~\cite{gallegofeliciano2026hiddendynamics,queipo-de-llano2026attention} provide valuable additional perspectives, and architectural decoupling results~\cite{sun2026anatomy} show that AS and MA need not always appear together. Together, these valuable results clarify the forward roles and separability of AS and MA, but a training-time puzzle remains: \emph{why do standard pre-norm Transformers learn such extreme activations at sink tokens?}
 
@@ -461,7 +469,7 @@ To test this hypothesis, we introduce V-scale, a value-path intervention that se
 Across model sizes, we find that V-scale preserves AS but substantially suppresses MA, illustrating that the two phenomena can be separated once gradient sinks are controlled.
 On downstream tasks, V-scale remains comparable to the baseline on standard evaluations and improves long-context retrieval.
 
-Our findings also suggest that some phenomena in LLMs may not be best understood purely as forward functional structures, but also as reflections of how optimization adapts to architectural constraints. We believe this perspective may be useful for future designs of architectures that aim to preserve the benefits of sink structure while reducing its costs.
+Our findings motivate studying how sink-induced gradient regulation interacts with numerical precision during training~\cite{qiu2026flash}. A broader direction is to examine whether interventions on this mechanism preserve learning from limited context and experience, connecting to Transformer-based in-context learning as meta-learning~\cite{wu2025icl} and data-efficient agentic learning~\cite{wang2026deal}. These connections call for direct evaluations of few-shot learning and agent experience reuse.
 
 \paragraph{Limitations}
 This work has some limitations.
@@ -471,6 +479,7 @@ These limitations are left for future work.
 
 \section*{Acknowledgements}
 
+Q. Yao is sponsored by Beijing Nova Program.
 Z. Lin was supported by the NSF China (No. 62276004), the Beijing Natural Science Foundation (No. L257007), and the Beijing Major Science and Technology Project (No. Z251100008425006).
 
 \bibliographystyle{plainnat}
@@ -507,6 +516,7 @@ Our proposed V-scale has a narrower purpose. It is designed as a mechanism test 
 As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm,nguyen2019transformers}. 
 RMSNorm removes mean-centering while preserving rescaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama,grattafiori2024llama3herdmodels,qwen2.5,qwen3,glm2024chatglm}.
 In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on normalized inputs, so very large residual-stream norms have a limited direct role in the forward branch computation. This naturally motivates us to ask how normalization shapes backward signal propagation during training.
+Qiu and Yao~\cite{qiu2026flash} study how numerical errors in low-precision FlashAttention accumulate through training dynamics and lead to instability. Our work examines a complementary mechanism: attention-induced gradient concentration and its regulation through activation scale in pre-norm Transformers.
 
 \iffalse
 \begin{table}[ht]
