@@ -82,9 +82,13 @@
 Attention sinks and massive activations are recurring and closely related phenomena in Transformer models. 
 Existing explanations have largely focused on the forward pass, yet in pre-norm Transformers, large residual-stream norms play only an indirect forward role because sublayers operate on normalized inputs.
 We study this relationship from the perspective of backpropagation. Empirically and theoretically, we show that under causal masking, attention sinks can induce pronounced gradient concentration, which we term \emph{gradient sinks}. Since the RMSNorm Jacobian attenuates gradients roughly in inverse proportion to input norm, massive activations can be understood as adaptive regulators of this localized gradient pressure during training.
+<<<<<<< Updated upstream
 This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale, a modification that adjusts backpropagated gradients on the value path. In V-scale models, attention sinks are preserved, whereas massive activations are suppressed. These results identify gradient sinks as a backward-pass counterpart of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at
 \footnote{+qm+ make a code here} 
 \href{https://github.com/LARS-research/GradientSink}{https://github.com/LARS-research/GradientSink}.
+=======
+This interpretation predicts that attenuating sink-induced gradients should weaken massive activations. We test this prediction with V-scale and a backward-only control that leaves the forward value states unchanged. Both interventions suppress massive activations while retaining substantial attention-sink behavior; the control shows that changing the value-path backward rule alone is sufficient for this effect. These results identify gradient sinks as a backward-pass counterpart of attention sinks, and massive activations as an adaptive RMSNorm-mediated response that attenuates the resulting localized training pressure. Our code is available at \href{https://github.com/CheYHinSpark/GradientSinkPaper}{https://github.com/CheYHinSpark/GradientSinkPaper}.
+>>>>>>> Stashed changes
 \end{abstract}
 
 \section{Introduction}
@@ -103,7 +107,11 @@ Our contributions are threefold:
 \begin{itemize}
 \item \textbf{Gradient sinks.} We identify gradient sinks as a backward-pass counterpart of attention sinks in pre-norm Transformers. We show that concentrated gradient pressure at the first token is widespread across models.
 \item \textbf{Mechanism.} We provide an empirical and theoretical account of massive activations as adaptive regulators. In pre-norm architectures, RMSNorm makes activation scale an effective local factor to attenuate gradient pressure induced by attention sinks, thereby stabilizing gradient transport across the residual stream.
+<<<<<<< Updated upstream
 \item \textbf{Intervention.} We propose \emph{V-scale}, a value-path gradient valve that attenuates sink-induced gradients. V-scale and its backward-only control substantially suppresse massive activations while preserving attention sinks, thus supporting our proposed mechanism. Downstream evaluations check that the intervention preserves basic language capability and improves long-context retrieval robustness, including under several quantization settings.
+=======
+\item \textbf{Intervention.} We use \emph{V-scale} as a value-path intervention to test the proposed mechanism. A backward-only control leaves forward values unchanged yet suppresses massive activations while retaining substantial attention-sink behavior, showing that backward modulation alone is sufficient. Downstream evaluations check that the intervention preserves basic language-model capability; retrieval and quantization outcomes depend on the task and setting.
+>>>>>>> Stashed changes
 \end{itemize}
 
 \section{Setup}
@@ -310,7 +318,11 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \section{Mechanistic Intervention and Validation}
 \label{sec:vscale}
 
+<<<<<<< Updated upstream
 The previous sections suggest a concrete and testable prediction of our mechanism. If massive activations are primarily responses to localized gradient pressure, then reducing that pressure should weaken MA even when attention sinks are largely preserved. We use V-scale primarily as a training-time intervention to test this prediction. % Rather than 提出一种全新的更优架构，我们也做了Downstream performances are also evaluated mainly as capability controls
+=======
+The previous sections suggest a testable prediction of our mechanism: relieving localized gradient pressure during training should weaken MA while retaining substantial attention-sink behavior. We use V-scale primarily as a training-time intervention to test this prediction, not as a general-purpose replacement for standard Transformers. Downstream evaluations serve first as capability controls; quantization and retrieval effects are secondary observations whose scope must be assessed separately.
+>>>>>>> Stashed changes
 
 The value path is the natural target channel for three reasons.
 First, modifying only value states does not affect the attention weights that depend only on $Q$ and $K$.
@@ -393,11 +405,16 @@ We train V-scale models using the same data, optimizer, and model configurations
     Top row: the three 0.3B models; bottom row: the 1B baseline and full V-scale models.
     From left to right: thresholded sink rate, residual-stream output norm, MLP output norm, and attention output norm.
     We compare the first token with the mean over the rest early tokens (positions 1--15).
+<<<<<<< Updated upstream
     Across both scales, V-scale largely preserves attention sinks while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs. The backward-only control shows the same qualitative pattern.
+=======
+    The backward-only control retains substantial sink behavior and suppresses token-0 activation norms without directly changing forward value states. Full V-scale shows the same qualitative pattern at both model scales.
+>>>>>>> Stashed changes
     }\label{fig:vscale_as_ma_compare}
 \end{figure}
 
 \paragraph{Mechanism verification}
+<<<<<<< Updated upstream
 We re-measure gradient sinks as defined in Definition~\ref{def:gradient_sink}. Figure~\ref{fig:vscale-gs} shows that in the 0.3B full V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$. This is the expected outcome of a partial intervention on the value-path gradient.
 
 Figure~\ref{fig:vscale_as_ma_compare} displays the layer-wise thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate} and output norms at several sites. The top row compares the 0.3B baseline, full V-scale, and backward-only models, while the bottom row compares the 1B baseline and full V-scale models. The same AS and MA protocol is used for all models, averaging over a batch of 512 inputs with 2048 tokens.
@@ -413,6 +430,32 @@ Beyond mechanism verification, we examine how V-scale behaves on downstream eval
 We evaluate the 1B baseline and V-scale models on standard language-modeling and reasoning tasks using the LM Evaluation Harness~\cite{eval-harness}.
 
 % 不准用冒号写法。
+=======
+We re-measure gradient sinks as defined in Definition~\ref{def:gradient_sink}. Figure~\ref{fig:vscale-gs} shows that in the 0.3B full V-scale model, the gradient sink remains present but is substantially weaker, with the median $R_{GS}^{\ell}(0)$ defined in~\eqref{eq:gs_def} dropping from roughly $40.3$ in the baseline to $5.6$.
+
+Figure~\ref{fig:vscale_as_ma_compare} displays the layer-wise thresholded Sink Rate $\mathrm{Sink}_s^{\epsilon,\ell}$ in~\eqref{eq:sink_rate} and output norms at several sites. Its top row compares the 0.3B baseline, full V-scale, and backward-only models; its bottom row compares the 1B baseline and full V-scale models. The same AS and MA protocol is used for all models, averaging over a batch of 512 inputs with 2048 tokens. Table~\ref{tab:backward_only_03b} summarizes the 0.3B results at checkpoint 20,000.
+
+\begin{table}[t]
+    \centering
+    \caption{Mechanistic control at 0.3B and checkpoint 20,000. AS is the layer-mean token-0 thresholded sink rate from~\eqref{eq:sink_rate}; activation entries are layer means of token-0 norms. All three models use the same training configuration and evaluation protocol.}
+    \label{tab:backward_only_03b}
+    \begin{tabular}{lcccc}
+        \toprule
+        Model & Valid. loss & AS mean & $\|h_{0,\mathrm{out}}\|_2$ mean & $\|r^{\mathrm{mlp}}_0\|_2$ mean \\
+        \midrule
+        Baseline & 2.9168 & 0.6172 & 1915.98 & 346.35 \\
+        Full V-scale & 2.9068 & 0.5018 & 345.51 & 75.42 \\
+        Backward-only & 2.9307 & 0.4583 & 606.85 & 112.77 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The backward-only run remains well trained: its validation loss is only $0.48\%$ above the baseline. Its mean token-0 sink rate decreases from $0.6172$ to $0.4583$ but remains substantial, while the mean token-0 residual-stream and MLP output norms fall by $68.3\%$ and $67.4\%$, respectively. Because~\eqref{eq:vscale_backward_only} leaves the forward value state unchanged, changing the value-path backward rule alone is sufficient to suppress MA without training failure or eliminating AS. This does not rule out an additional contribution from the forward change in full V-scale.
+
+\paragraph{Behavioral controls and practical scope}
+Beyond mechanism verification, we examine how full V-scale behaves on downstream evaluations.
+We evaluate the 1B baseline and V-scale models on standard language-modeling and reasoning tasks using the LM Evaluation Harness~\cite{eval-harness}.
+>>>>>>> Stashed changes
 These tasks serve as capability controls: a reduction in MA caused by failed or severely undertrained models would not support the proposed mechanism.
 Table~\ref{tab:main_standard_1b} shows broadly comparable \texttt{bfloat16} performance, with gains on some tasks and losses on others.
 
@@ -434,8 +477,9 @@ Table~\ref{tab:main_standard_1b} shows broadly comparable \texttt{bfloat16} perf
     \end{tabular}
 \end{table}
 
-As a further diagnostic, we use a multi-key Needle-in-a-Haystack (NIAH) task.
-We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization. Table~\ref{tab:main_niah_multikey_1b} compares the retrieval accuracy of the 1B baseline and V-scale models, averaged over $5$ random seeds. V-scale shows positive gains in every listed precision, quantization method, and context length, with the largest gains appearing in the YaRN-extended 8192-token setting~\cite{peng2024yarn}. Additional results are deferred to Appendix~\ref{app:additional_downstream}.
+As a further behavioral diagnostic, we evaluate Needle-in-a-Haystack (NIAH) retrieval under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weight and $y$-bit activation quantization. Table~\ref{tab:main_niah_multikey_1b} shows gains in every listed multi-key setting, including YaRN-extended contexts~\cite{peng2024yarn}, over $5$ evaluation seeds. The harder single-needle task is mixed: with YaRN at 4096 tokens, GPTQ accuracy falls from $75.72$ to $61.04$ and AWQ from $78.24$ to $49.80$; even at native 2048 tokens, AWQ falls from $96.16$ to $85.20$ (Appendix~\ref{app:additional_downstream}). Thus V-scale does not uniformly improve retrieval across tasks, quantization methods, or context extension.
+
+These PTQ comparisons also do not by themselves establish a general activation-quantization benefit. BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while SmoothQuant compensates for activation outliers in its W8A8 setting. A possible benefit from reduced activation ranges is therefore conditional on the quantization scheme; the unfavorable W4A16/YaRN interactions remain unexplained.
 
 \begin{table}[t]
     \centering
@@ -479,9 +523,9 @@ We evaluate under \texttt{bfloat16} and four PTQ settings: SmoothQuant (W8A8)~\c
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
 Our empirical and theoretical results suggest that the connection between the two is not merely a forward-pass correlation, but is mediated by a backward mechanism: under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, and MA emerges as an adaptive regulator of this localized pressure in pre-norm Transformers.
-To test this hypothesis, we introduce V-scale, a value-path intervention that selectively modulates backpropagated gradients.
-Across model sizes, we find that V-scale preserves AS but substantially suppresses MA, illustrating that the two phenomena can be separated once gradient sinks are controlled.
-On downstream tasks, V-scale remains comparable to the baseline on standard evaluations and improves long-context retrieval.
+To test this hypothesis, we introduce V-scale, a value-path intervention that modulates backpropagated gradients, and a backward-only control that removes its direct forward-value change.
+The control retains substantial AS while suppressing MA, showing that backward modulation alone is sufficient for the predicted effect; it does not exclude an additional role for the forward component of full V-scale.
+The full intervention remains broadly comparable to the baseline on standard evaluations and improves the tested multi-key retrieval settings, but results on harder single-needle tasks and post-training quantization are mixed.
 
 Our findings motivate studying how sink-induced gradient regulation interacts with numerical precision during training~\cite{qiu2026flash}. A broader direction is to examine whether interventions on this mechanism preserve learning from limited context and experience, connecting to Transformer-based in-context learning as meta-learning~\cite{wu2025icl} and data-efficient agentic learning~\cite{wang2026deal}. These connections call for direct evaluations of few-shot learning and agent experience reuse.
 
@@ -489,6 +533,7 @@ Our findings motivate studying how sink-induced gradient regulation interacts wi
 This work has some limitations.
 First, our study is restricted to Llama-like dense language models. It remains unclear whether and to what extent the same mechanism transfers to other settings, such as mixture-of-experts architectures or multimodal Transformers.
 Second, our analysis does not exclude other factors, such as data distribution, optimizer, or numerical precision, from shaping AS and MA during training.
+Third, the unfavorable single-needle outcomes under some W4A16 methods and YaRN extensions remain unexplained. The present PTQ comparisons do not establish a universal quantization benefit or an advantage for deployment.
 These limitations are left for future work.
 
 \section*{Acknowledgements}
@@ -822,7 +867,11 @@ Token 0 remains the largest-gradient position but the remaining concentration is
 
 This subsection reports additional downstream evaluations, supplementing the compact summary in Section~\ref{sec:vscale}.
 We focus on 1B models because this is the largest scratch-trained setting in our study, avoiding a largely redundant expansion of the appendix.
+<<<<<<< Updated upstream
 We use the same comparison protocol, pairing each baseline with its V-scale counterpart and evaluating each pair in \texttt{bfloat16} and under post-training quantization. These measurements primarily check whether suppressing massive activations preserves ordinary language-modeling and reasoning behavior across precision settings, rather than establishing uniform practical superiority.
+=======
+We use the same comparison protocol, pairing each baseline with its V-scale counterpart and evaluating each pair in \texttt{bfloat16} and under post-training quantization. These measurements primarily check whether suppressing massive activations preserves ordinary language-modeling and reasoning behavior across precision settings; they do not establish uniform practical superiority.
+>>>>>>> Stashed changes
 
 Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive on standard evaluations. Perplexities are nearly unchanged, and most accuracy columns move only modestly. V-scale improves ARC-C, BoolQ, COPA, and OpenBookQA under most precision settings, while several other tasks decrease slightly. Thus the value-path intervention does not appear to sacrifice basic downstream capability.
 
@@ -875,8 +924,12 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
     \end{tabular}
 \end{table}
 
+<<<<<<< Updated upstream
 We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) variants. The native 1B models are evaluated up to 2048 tokens. To test longer contexts, we additionally apply YaRN with an extension factor of $4$ and evaluate up to 8192 tokens. Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b} report three templates of increasing difficulty. All NIAH entries are means and standard deviations over $5$ random seeds. The single-needle setting in Table~\ref{tab:niah_single2_1b} is close to saturated at short context lengths, but V-scale improves the longest 8192-token YaRN setting for every precision/quantization mode. A harder single-needle variant in Table~\ref{tab:niah_single3_1b} is more mixed. V-scale substantially improves the native 2048-token setting except under AWQ, while some YaRN-extended settings degrade. The clearest long-context benefit appears in the multi-key retrieval setting in Table~\ref{tab:niah_multikey1_1b}, where V-scale consistently outperforms the baseline across all listed context lengths and quantization methods.
 % 负面结果还没写
+=======
+We next evaluate long-context retrieval using Needle-in-a-Haystack (NIAH) variants. The native 1B models are evaluated up to 2048 tokens. To test longer contexts, we additionally apply YaRN with an extension factor of $4$ and evaluate up to 8192 tokens. Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b} report three templates of increasing difficulty. All NIAH entries are means and standard deviations over $5$ random seeds. The single-needle setting in Table~\ref{tab:niah_single2_1b} is close to saturated at short context lengths, but V-scale improves the longest 8192-token YaRN setting for every precision/quantization mode. A harder single-needle variant in Table~\ref{tab:niah_single3_1b} is mixed: AWQ is worse even at native 2048 tokens, and several YaRN-extended GPTQ/AWQ cases deteriorate substantially. The cause of these interactions is unresolved. The clearest positive retrieval result appears in the multi-key setting in Table~\ref{tab:niah_multikey1_1b}, where V-scale outperforms the baseline across the listed context lengths and quantization methods.
+>>>>>>> Stashed changes
 
 \begin{table}[ht]
     \centering
