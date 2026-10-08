@@ -244,7 +244,7 @@ Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Change}_
 \end{figure}
 
 We compare each gradient-reshaping ratio with the corresponding input activation norm, where activation norms are averaged over evaluation batches. Figure~\ref{fig:attn_scatter_main} shows a highly structured pattern.
-The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{he2016deep,xiong2020layernorm,liu2020understanding,wang2024deepnet}.
+The left panels show that large-activation points, almost all from token 0, are precisely where branch-local amplification becomes extreme, while the remaining tokens stay in a much lower-amplification regime. Such large values of $\mathrm{Bloat}^{\mathrm{attn}}$ naturally raise the concern that local gradient amplification may distort residual-stream transport during backpropagation and thereby harm training stability~\cite{xiong2020layernorm,liu2020understanding}.
 The middle panels show that this is largely not the case. Even when $\mathrm{Bloat}^{\mathrm{attn}}$ becomes large, the corresponding $\mathrm{Change}^{\mathrm{attn}}$ values remain tightly concentrated near $1$ and therefore near $\log_{10}1 = 0$ on the plotted scale, aside from a small number of points outside the massive-activation regime.
 Thus, the residual-stream gradient norm usually does not change dramatically despite strong local amplification inside the attention branch. The right panels suggest why this remains possible. Larger activation norms are consistently associated with smaller $\mathrm{Compress}^{\mathrm{attn}}$, revealing a strong negative relationship between activation scale and local gradient attenuation.
 That is, the most amplified gradients are also the most strongly compressed before being passed back into the residual stream, avoiding uncontrolled gradient growth.
@@ -489,7 +489,7 @@ These limitations are left for future work.
 Q. Yao is sponsored by Beijing Nova Program.
 Z. Lin was supported by the NSF China (No. 62276004), the Beijing Natural Science Foundation (No. L257007), and the Beijing Major Science and Technology Project (No. Z251100008425006).
 
-\bibliographystyle{plainnat}
+\bibliographystyle{abbrvnat}
 \bibliography{neurips_2026}
 
 \clearpage
@@ -500,7 +500,7 @@ Z. Lin was supported by the NSF China (No. 62276004), the Beijing Natural Scienc
 
 \paragraph{Phenomena and utilization}
 Attention sinks (AS) refer to the tendency of Transformer-based LLMs to route disproportionate attention mass to a small set of early or otherwise uninformative tokens~\cite{xiao2024streamingllm,gu2025when}. Their practical importance was first made especially clear by StreamingLLM, which showed that preserving sink tokens in the KV cache enables stable streaming inference beyond the training context window~\cite{xiao2024streamingllm}. Subsequent work has used or analyzed sink tokens for KV-cache compression, long-context inference, context anchoring, prompt tuning, and fine-tuning robustness~\cite{su2025kvsink,liu2026sinktrack,liu2025all,fu2026attention,liu2026surgery}. 
-Massive activations (MA) are sparse but extremely large activation values that recur in LLMs and often appear at specific token positions or features~\cite{sun2024massive,an2025systematic,owen2025refined}. They are closely related to activation outliers that dominate numerical ranges and complicate low-bit inference~\cite{dettmers2022gptint,bondarenko2023quantizable,xiao2023smoothquant}.
+Massive activations (MA) are sparse but extremely large activation values that recur in LLMs and often appear at specific token positions or features~\cite{sun2024massive,an2025systematic}. They are closely related to activation outliers that dominate numerical ranges and complicate low-bit inference~\cite{dettmers2022gptint,bondarenko2023quantizable,xiao2023smoothquant}.
 AS and MA are extreme-token phenomena whose functional roles and training origins have become active mechanistic questions~\cite{guo2025activedormant,qiu2026unified}. Our work identifies gradient sinks as a missing backward-pass phenomenon.
 
 \paragraph{Mechanistic interpretations}
@@ -520,7 +520,7 @@ Recent work further studies the anatomy of AS and MA across architectures, showi
 Our proposed V-scale has a narrower purpose. It is designed as a mechanism test that keeps query-key attention scores unchanged while attenuating value-path gradient pressure, allowing us to ask whether MA can be suppressed while AS is largely preserved.
 
 \paragraph{Normalization and pre-norm Transformers}
-As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm,nguyen2019transformers}. 
+As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm}. 
 RMSNorm removes mean-centering while preserving rescaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama,grattafiori2024llama3herdmodels,qwen2.5,qwen3,glm2024chatglm}.
 In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on normalized inputs, so very large residual-stream norms have a limited direct role in the forward branch computation. This naturally motivates us to ask how normalization shapes backward signal propagation during training.
 Qiu and Yao~\cite{qiu2026flash} study how numerical errors in low-precision FlashAttention accumulate through training dynamics and lead to instability. Our work examines a complementary mechanism that how attention-induced gradient concentration is regulated through activation scale in pre-norm Transformers.
