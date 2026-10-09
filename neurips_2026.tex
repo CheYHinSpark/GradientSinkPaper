@@ -281,16 +281,16 @@ The full key and query identities are given in Appendix~\ref{app:theory:exact}, 
 We next quantify how much gradient pressure a sink token receives by relating value-path gradients to the attention-column mass $M_s=\sum_{t=s}^{T-1}a_{ts}$ and second moment $S_s=\sum_{t=s}^{T-1}a_{ts}^2$ defined in~\eqref{eq:sink_mass}.
 
 \begin{theorem}[Value-path gradient control by sink statistics]\label{thm:v_second_moment_main}
-Suppose that the upstream gradients on positions $t\ge s$ admit the decomposition $g_t=\mu+\varepsilon_t$, where $\mu\in\mathbb{R}^{d_{\mathrm{head}}}$ is a coherent component. The noise terms satisfy $\mathbb{E}[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))\le\sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))|\le\rho$ for all $t\ne t'$.
+Fix the current model parameters and condition on the attention matrix $A=(a_{tj})$. Write $\mathbb{E}_A$ and $\mathrm{Cov}_A$ for conditional expectation and covariance given $A$. Suppose that the upstream gradients on positions $t\ge s$ admit the decomposition $g_t=\mu+\varepsilon_t$, where $\mu=\mathbb{E}_A[g_t]\in\mathbb{R}^{d_{\mathrm{head}}}$ is shared across these positions. The noise terms satisfy $\mathbb{E}_A[\varepsilon_t]=0$, $\mathrm{Tr}(\mathrm{Cov}_A(\varepsilon_t))\le\sigma^2$ for all $t$, and $|\mathrm{Tr}(\mathrm{Cov}_A(\varepsilon_t,\varepsilon_{t'}))|\le\rho$ for all $t\ne t'$.
 Then,
 $M_s^2\|\mu\|_2^2
 \le
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
+\mathbb{E}_A\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
 \le
 M_s^2\|\mu\|_2^2 + \sigma^2 S_s + \rho(M_s^2 - S_s)$.
 \end{theorem}
 
-Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. The term $M_s^2\|\mu\|_2^2$ is the coherent accumulation along the sink column, while $S_s$ and $\rho(M_s^2-S_s)$ bound the accumulated variance and cross-token covariance. Thus a token with large attention-column mass receives a larger value-path training signal.
+Theorem~\ref{thm:v_second_moment_main} shows that sink structure provides a natural and quantitatively explicit route to value-path gradient concentration. The term $M_s^2\|\mu\|_2^2$ is the coherent accumulation along the sink column, while $S_s$ and $\rho(M_s^2-S_s)$ bound the accumulated variance and cross-token covariance. For a nonzero coherent component, larger attention-column mass raises the lower bound on the conditional second moment of the value-path gradient.
 
 The dominant value-path spike seen in Section~\ref{sec:as_to_gs} is thus not accidental. The value path is the pathway where sink statistics most transparently govern gradient aggregation. Appendix~\ref{app:theory:kq} further provides supporting results for the key and query pathways. The key bound has a similar dependence on $M_s$, whereas the query bound depends on within-row key dispersion.
 
@@ -404,10 +404,10 @@ Figure~\ref{fig:vscale_as_ma_compare} displays the layer-wise thresholded Sink R
 
 Across both model scales, full V-scale retains strong AS behavior and substantially reduces the token-0 residual-stream and MLP output norms. Attention output norms also decrease, consistent with the direct contraction of value states.
 
-The backward-only control produces a similar reduction in MA while retaining substantial AS, as shown in the top row of Figure~\ref{fig:vscale_as_ma_compare}. The control uses the same 0.3B training configuration as the baseline, and all three models are evaluated at checkpoint 20,000. Relative to the baseline, the backward-only model reduces the layer-mean token-0 residual-stream and MLP output norms by $68.3\%$ and $67.4\%$. Its validation loss is close to that of the baseline. These results show that changing the value-path backward rule alone is sufficient to suppress MA during training. The forward transformation may also contribute to the stronger suppression observed with full V-scale.
+The backward-only control produces a similar reduction in MA while retaining substantial AS, as shown in the top row of Figure~\ref{fig:vscale_as_ma_compare}. The control uses the same 0.3B training configuration as the baseline, and all three models are evaluated at checkpoint 20,000. Relative to the baseline, the backward-only model reduces the layer-mean token-0 residual-stream and MLP output norms. Its validation loss is close to that of the baseline. These results show that changing the value-path backward rule alone is sufficient to suppress MA during training. The forward transformation may also contribute to the stronger suppression observed with full V-scale.
 
 \paragraph{Downstream performance}
-We evaluate the 1B baseline and full V-scale models on standard language-modeling and reasoning tasks using the LM Evaluation Harness~\cite{eval-harness}. Table~\ref{tab:main_standard_1b} shows comparable overall performance under \texttt{bfloat16}. V-scale improves ARC-C from $24.91$ to $27.05$ and BoolQ from $51.38$ to $56.27$, alongside smaller gains on COPA and OpenBookQA. WikiText perplexity remains almost unchanged, and several other tasks show small decreases.
+We evaluate the 1B baseline and full V-scale models on standard language-modeling and reasoning tasks using the LM Evaluation Harness~\cite{eval-harness}. Table~\ref{tab:main_standard_1b} shows comparable overall performance under \texttt{bfloat16}. V-scale improves ARC-C and BoolQ, alongside smaller gains on COPA and OpenBookQA. WikiText perplexity remains almost unchanged, and several other tasks show small decreases.
 
 \begin{table}[t]
     \centering
@@ -428,14 +428,14 @@ We evaluate the 1B baseline and full V-scale models on standard language-modelin
     \end{tabular}
 \end{table}
 
-As a further behavioral diagnostic, we evaluate Needle-in-a-Haystack (NIAH) retrieval under \texttt{bfloat16} and four post-training quantization methods: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weights and $y$-bit activations. Table~\ref{tab:main_niah_multikey_1b} reports mean accuracy over $5$ evaluation seeds. V-scale outperforms the baseline in every tested combination of precision and context length, both within the native context and after YaRN extension~\cite{peng2024yarn}. At 8192 tokens, the gains range from $8.68$ to $15.04$ percentage points across \texttt{bfloat16} and the four quantization methods. The \texttt{bfloat16} result rises from $48.32\%$ to $62.00\%$. These consistent gains demonstrate improved retrieval when multiple key-value associations compete within a long context.
+As a further behavioral diagnostic, we evaluate Needle-in-a-Haystack (NIAH) retrieval under \texttt{bfloat16} and four post-training quantization methods: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weights and $y$-bit activations. Table~\ref{tab:main_niah_multikey_1b} reports mean accuracy over $5$ evaluation seeds. V-scale outperforms the baseline in every tested combination of precision and context length, both within the native context and after YaRN extension~\cite{peng2024yarn}. At 8192 tokens, the gains range from $8.68$ to $15.04$ percentage points across \texttt{bfloat16} and the four quantization methods. These consistent gains demonstrate improved retrieval when multiple key-value associations compete within a long context.
 
 A possible connection between the gains on multi-key NIAH, BoolQ, and ARC-C is their demand for selecting relevant information under competing cues. Multi-key NIAH requires retrieving the queried association among competing key-value pairs, while BoolQ requires finding evidence relevant to a question in a passage. ARC-C involves selecting and combining scientific information to distinguish plausible answer choices. The variation in learned V-scale parameters across layers and heads (Figure~\ref{fig:vscale_theta_heatmap}) suggests that the intervention may affect specialized information-selection pathways differently. Testing this explanation requires identifying the affected head functions and their contributions to each task.
 
-Results on the harder single-needle task are mixed, with substantial drops in some GPTQ and AWQ settings after YaRN extension (Appendix~\ref{app:additional_downstream}). For example, AWQ accuracy at 4096 tokens falls from $78.24\%$ to $49.80\%$. The causes of these interactions remain unresolved.
+Results on the harder single-needle task are mixed, with substantial drops in some GPTQ and AWQ settings after YaRN extension (Appendix~\ref{app:additional_downstream}). The causes of these interactions remain unresolved.
 
 \paragraph{Sensitivity to activation quantization}
-BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while SmoothQuant compensates for activation outliers at Linear inputs. To examine sensitivity to activation range more directly, we compare symmetric W8A8 quantization with dynamic per-token and calibrated static per-tensor activation scales (Appendix~\ref{app:activation_quantization}). Dynamic scaling keeps both models close to their \texttt{bfloat16} performance on standard tasks. With static scaling applied to all Linear modules except the output head, WikiText perplexity rises to $33.55$ for the baseline and $25.46$ for V-scale. At the native 2048-token context length, baseline accuracy falls to $0.00$--$2.76\%$ across the three NIAH variants, whereas V-scale retains $56.04$--$79.40\%$. Quantizing only the MLP \texttt{down\_proj} modules nearly reproduces this contrast. These results show that V-scale is less sensitive to a coarse, fixed activation range along the MLP pathway associated with its strongest MA reduction.
+BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while SmoothQuant compensates for activation outliers at Linear inputs. To examine sensitivity to activation range more directly, we compare symmetric W8A8 quantization with dynamic per-token and calibrated static per-tensor activation scales (Appendix~\ref{app:activation_quantization}). Dynamic scaling keeps both models close to their \texttt{bfloat16} performance on standard tasks. With static scaling applied to all Linear modules except the output head, the baseline suffers a much larger perplexity increase than V-scale. At the native context length, baseline retrieval falls to near-zero accuracy across all three NIAH variants, whereas V-scale retains substantial retrieval capability. Quantizing only the MLP \texttt{down\_proj} modules nearly reproduces this contrast. These results show that V-scale is less sensitive to a coarse, fixed activation range along the MLP pathway associated with its strongest MA reduction.
 
 \begin{table}[t]
     \centering
@@ -938,7 +938,7 @@ The harder single-needle template in Table~\ref{tab:niah_single3_1b} gives mixed
 
 We evaluate the 1B baseline and V-scale models under three symmetric INT8 configurations to examine sensitivity to activation range. In the \emph{all-Linear dynamic-token} setting, every Linear module except \texttt{lm\_head} uses static per-channel INT8 weights and dynamic per-token INT8 input activations. The \emph{all-Linear static-tensor} setting keeps the same target modules and weight format, and uses MinMax observers to calibrate a static per-tensor activation scale. The \emph{down-projection-only static-tensor} setting applies the same static weight and activation formats only to modules matching \texttt{mlp.down\_proj}.
 
-The calibration data, sample count, and sequence length follow the corresponding original quantization evaluations. The downstream task configurations are also unchanged. NIAH uses the native 2048-token context and the same five evaluation seeds as the corresponding experiments in Appendix~\ref{app:additional_downstream}. Dynamic per-token scaling adapts to each token's activation range. Static per-tensor scaling shares a calibrated range across tokens, exposing sensitivity to activation outliers. Restricting this quantization to the MLP down-projection tests the pathway associated with the strongest MA reduction in Figure~\ref{fig:vscale_as_ma_compare}. These settings serve as controlled diagnostics of sensitivity to a fixed activation range.
+Calibration uses 512 examples from the English C4 validation split. The downstream task configurations are also unchanged. For the ten-task accuracy average, we use length-normalized accuracy for ARC-C, ARC-E, HellaSwag, OpenBookQA, PIQA, and SCIQ, and accuracy for BoolQ, COPA, LAMBADA, and WinoGrande. NIAH uses the native 2048-token context and evaluation seeds $0$--$4$, matching the corresponding experiments in Appendix~\ref{app:additional_downstream}. We report the mean and sample standard deviation across these seeds. Dynamic per-token scaling adapts to each token's activation range. Static per-tensor scaling shares a calibrated range across tokens, exposing sensitivity to activation outliers. Restricting this quantization to the MLP down-projection tests the pathway associated with the strongest MA reduction in Figure~\ref{fig:vscale_as_ma_compare}. These settings serve as controlled diagnostics of sensitivity to a fixed activation range.
 
 \begin{table}[ht]
     \centering
@@ -961,12 +961,12 @@ The calibration data, sample count, and sequence length follow the corresponding
     \end{tabular}
 \end{table}
 
-Table~\ref{tab:activation_quantization_standard} shows that both models remain close to their \texttt{bfloat16} performance under dynamic per-token scaling. Static per-tensor scaling yields a much larger separation. With all Linear modules quantized, LAMBADA perplexity reaches $46.85$ for the baseline and $23.65$ for V-scale, while mean accuracy is $48.54\%$ and $50.55\%$, respectively. Quantizing only the MLP down-projection produces similar perplexities and accuracies, locating most of the observed sensitivity in this pathway.
+Table~\ref{tab:activation_quantization_standard} shows that both models remain close to their \texttt{bfloat16} performance under dynamic per-token scaling. Static per-tensor scaling yields a much larger separation. With all Linear modules quantized, V-scale has substantially lower perplexity and higher mean accuracy than the baseline. Quantizing only the MLP down-projection produces similar perplexities and accuracies, locating most of the observed sensitivity in this pathway.
 
 \begin{table}[ht]
     \centering
     \caption{
-    NIAH retrieval under controlled activation quantization at the native 2048-token context length. Single-2, Single-3, and Multi-key denote the same templates as Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b}. Entries are mean accuracy percentages over five evaluation seeds. Higher is better, and bold marks the better result within each baseline (B) and V-scale (V) pair.
+    NIAH retrieval under controlled activation quantization at the native 2048-token context length. Single-2, Single-3, and Multi-key denote the same templates as Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b}. Entries are mean accuracy percentages with sample standard deviations over five evaluation seeds. Higher is better, and bold marks the better result within each baseline (B) and V-scale (V) pair.
     }\label{tab:activation_quantization_niah}
     \begin{tabular}{lcccccc}
         \toprule
@@ -976,10 +976,10 @@ Table~\ref{tab:activation_quantization_standard} shows that both models remain c
         \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
         Setting & B & V & B & V & B & V \\
         \midrule
-        \texttt{bfloat16} & \textbf{98.00} & 97.80 & 85.48 & \textbf{95.60} & 65.04 & \textbf{71.64} \\
-        All Linear, dynamic-token W8A8 & 96.04 & \textbf{96.28} & 77.00 & \textbf{91.40} & 63.44 & \textbf{66.88} \\
-        All Linear, static-tensor W8A8 & 1.52 & \textbf{79.40} & 0.00 & \textbf{75.32} & 2.76 & \textbf{56.04} \\
-        \texttt{down\_proj} only, static-tensor W8A8 & 2.16 & \textbf{79.28} & 0.04 & \textbf{79.08} & 3.40 & \textbf{56.84} \\
+        \texttt{bfloat16} & $\mathbf{98.00}_{\pm 0.69}$ & $97.80_{\pm 0.42}$ & $85.48_{\pm 1.24}$ & $\mathbf{95.60}_{\pm 0.95}$ & $65.04_{\pm 1.09}$ & $\mathbf{71.64}_{\pm 3.46}$ \\
+        All Linear, dynamic-token W8A8 & $96.04_{\pm 1.11}$ & $\mathbf{96.28}_{\pm 0.54}$ & $77.00_{\pm 1.26}$ & $\mathbf{91.40}_{\pm 1.22}$ & $63.44_{\pm 1.98}$ & $\mathbf{66.88}_{\pm 2.17}$ \\
+        All Linear, static-tensor W8A8 & $1.52_{\pm 0.39}$ & $\mathbf{79.40}_{\pm 2.48}$ & $0.00_{\pm 0.00}$ & $\mathbf{75.32}_{\pm 2.29}$ & $2.76_{\pm 0.86}$ & $\mathbf{56.04}_{\pm 2.08}$ \\
+        \texttt{down\_proj} only, static-tensor W8A8 & $2.16_{\pm 0.36}$ & $\mathbf{79.28}_{\pm 1.87}$ & $0.04_{\pm 0.09}$ & $\mathbf{79.08}_{\pm 1.95}$ & $3.40_{\pm 1.09}$ & $\mathbf{56.84}_{\pm 2.67}$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -1088,24 +1088,26 @@ For $s=0$, causality implies $a_{00}=1$ and $y_0=v_0$. Thus we have $\beta_{00}=
 
 We prove the main value-path theorem used in Section~\ref{sec:theory}.
 
+Throughout this argument, we fix the current model parameters and condition on the attention matrix $A=(a_{tj})$. We use $\mathbb{E}_A[\cdot]=\mathbb{E}[\cdot\mid A]$ and $\mathrm{Cov}_A(\cdot,\cdot)=\mathrm{Cov}(\cdot,\cdot\mid A)$ for the resulting conditional moments. Thus $a_{ts}$, $M_s$, and $S_s$ are fixed within each expectation, while the assumptions below describe the remaining variability of the upstream gradients.
+
 \begin{assumption}[Mean-plus-noise model]\label{assump:mean-noise-app}
-Conditioned on the current parameters, the upstream gradient over data or minibatch randomness satisfies
+For every position $t\ge s$, the upstream gradient admits the decomposition
 \[
     g_t = \mu + \varepsilon_t,
 \]
-where $\mu := \mathbb{E}[g_t]$ is the coherent component and $\mathbb{E}[\varepsilon_t]=0$.
+where the conditional mean $\mu := \mathbb{E}_A[g_t]$ is the same across these positions and $\mathbb{E}_A[\varepsilon_t]=0$. The shared mean is a modeling assumption on the coherent component of the upstream gradients.
 \end{assumption}
 
 \begin{assumption}[Bounded cross-token covariance]\label{assump:cov-app}
 There exist $\sigma^2 \ge 0$ and $\rho \ge 0$ such that for all $t \neq t'$,
 \[
-    \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t)\bigr) \le \sigma^2,
+    \mathrm{Tr}\!\bigl(\mathrm{Cov}_A(\varepsilon_t)\bigr) \le \sigma^2,
     \quad
-    \bigl|\mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'})\bigr)\bigr| \le \rho.
+    \bigl|\mathrm{Tr}\!\bigl(\mathrm{Cov}_A(\varepsilon_t,\varepsilon_{t'})\bigr)\bigr| \le \rho.
 \]
 \end{assumption}
 
-Assumption~\ref{assump:mean-noise-app} is the standard decomposition of stochastic gradients into a coherent mean component plus zero-mean noise~\cite{mandt2017sgd,mccandlish2018noise}. Assumption~\ref{assump:cov-app} does not assume independence across token positions and keeps the cross-token covariance term explicit through $\rho$.
+Assumption~\ref{assump:mean-noise-app} uses a mean-plus-noise description of stochastic gradients~\cite{mandt2017sgd,mccandlish2018noise}, with a shared conditional mean across positions. Assumption~\ref{assump:cov-app} retains conditional cross-token correlations through $\rho$. The quantities $\mu$, $\sigma^2$, and $\rho$ may depend on the conditioned attention matrix.
 
 \begin{proof}[Proof of Theorem~\ref{thm:v_second_moment_main}]
 By Proposition~\ref{prop:v_agg_main} and Assumption~\ref{assump:mean-noise-app},
@@ -1114,36 +1116,36 @@ By Proposition~\ref{prop:v_agg_main} and Assumption~\ref{assump:mean-noise-app},
 \]
 Therefore,
 \[\begin{aligned}
-    \mathbb{E}\bigl[\|\nabla_{v_s} \mathcal{L}\|_2^2\bigr]
-    &= \mathbb{E}\left[\left\|M_s\mu + \sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2\right] \\
-    &= M_s^2\|\mu\|_2^2 + 2\,\mathbb{E}\left\langle M_s\mu, \sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t \right\rangle + \mathbb{E}\left\|\sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2.
+    \mathbb{E}_A\bigl[\|\nabla_{v_s} \mathcal{L}\|_2^2\bigr]
+    &= \mathbb{E}_A\left[\left\|M_s\mu + \sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2\right] \\
+    &= M_s^2\|\mu\|_2^2 + 2\,\mathbb{E}_A\left\langle M_s\mu, \sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t \right\rangle + \mathbb{E}_A\left\|\sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2.
 \end{aligned}\]
-Since $\mathbb{E}[\varepsilon_t]=0$, the cross term vanishes. Expanding the final term gives
+Under the conditioning, $a_{ts}$, $M_s$, and $\mu$ are fixed. Together with $\mathbb{E}_A[\varepsilon_t]=0$, this makes the cross term vanish. Expanding the final term gives
 \[
-    \mathbb{E}\left\|\sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2
-    = \sum\nolimits_{t=s}^{T-1}\sum\nolimits_{t'=s}^{T-1} a_{ts} a_{t's} \, \mathbb{E}\langle \varepsilon_t, \varepsilon_{t'} \rangle.
+    \mathbb{E}_A\left\|\sum\nolimits_{t=s}^{T-1} a_{ts}\varepsilon_t\right\|_2^2
+    = \sum\nolimits_{t=s}^{T-1}\sum\nolimits_{t'=s}^{T-1} a_{ts} a_{t's} \, \mathbb{E}_A\langle \varepsilon_t, \varepsilon_{t'} \rangle.
 \]
-Using $\mathbb{E}\langle \varepsilon_t, \varepsilon_{t'} \rangle = \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'}))$ and splitting diagonal and off-diagonal terms yields
+Using $\mathbb{E}_A\langle \varepsilon_t, \varepsilon_{t'} \rangle = \mathrm{Tr}(\mathrm{Cov}_A(\varepsilon_t,\varepsilon_{t'}))$ and splitting diagonal and off-diagonal terms yields
 \[
-\mathbb{E}\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
+\mathbb{E}_A\big[\|\nabla_{v_s}\mathcal{L}\|_2^2\big]
 =
 M_s^2\|\mu\|_2^2
 +
-\sum\nolimits_{t=s}^{T-1} a_{ts}^2 \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t))
+\sum\nolimits_{t=s}^{T-1} a_{ts}^2 \, \mathrm{Tr}(\mathrm{Cov}_A(\varepsilon_t))
 +
-\sum\nolimits_{\substack{s\le t,t'\le T-1 \\ t\ne t'}} a_{ts} a_{t's} \, \mathrm{Tr}(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'})).
+\sum\nolimits_{\substack{s\le t,t'\le T-1 \\ t\ne t'}} a_{ts} a_{t's} \, \mathrm{Tr}(\mathrm{Cov}_A(\varepsilon_t,\varepsilon_{t'})).
 \]
 Finally, Assumption~\ref{assump:cov-app} implies
 \[
-    \sum\nolimits_{t=s}^{T-1} a_{ts}^2 \, \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t)\bigr) \le \sigma^2 \sum\nolimits_{t=s}^{T-1} a_{ts}^2 = \sigma^2 S_s,
+    \sum\nolimits_{t=s}^{T-1} a_{ts}^2 \, \mathrm{Tr}\!\bigl(\mathrm{Cov}_A(\varepsilon_t)\bigr) \le \sigma^2 \sum\nolimits_{t=s}^{T-1} a_{ts}^2 = \sigma^2 S_s,
 \]
 and
 \[
-    \left|\sum\nolimits_{\substack{s\le t,t'\le T-1 \\ t\neq t'}} a_{ts} a_{t's} \, \mathrm{Tr}\!\bigl(\mathrm{Cov}(\varepsilon_t,\varepsilon_{t'})\bigr)\right|
+    \left|\sum\nolimits_{\substack{s\le t,t'\le T-1 \\ t\neq t'}} a_{ts} a_{t's} \, \mathrm{Tr}\!\bigl(\mathrm{Cov}_A(\varepsilon_t,\varepsilon_{t'})\bigr)\right|
     \le \rho \sum\nolimits_{\substack{s\le t,t'\le T-1 \\ t\neq t'}} a_{ts} a_{t's}
     = \rho(M_s^2 - S_s).
 \]
-Combining these bounds proves the theorem.
+These estimates give the upper bound. The lower bound follows from the nonnegativity of $\mathbb{E}_A\|\sum_{t=s}^{T-1}a_{ts}\varepsilon_t\|_2^2$.
 \end{proof}
 
 \begin{corollary}[Deterministic value-side upper bounds]\label{cor:v-deterministic-app}
