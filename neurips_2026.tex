@@ -212,19 +212,21 @@ These observations sharpen the empirical picture. Gradient sinks have a structur
 \subsection{Massive activations align with gradient reshaping}\label{sec:ma_grad_reshape}
 
 We next ask how the pre-norm blocks transmit the local gradients and how this reshaping relates to activation norms.
-In a pre-norm attention block, we have $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$ and therefore $\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L} = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$. Moreover, the difference $\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}$ isolates the additional gradient contribution propagated through the attention branch, excluding the identity skip path. We introduce three diagnostic measurements. $\mathrm{Bloat}$ locates branch-local amplification, $\mathrm{Change}$ measures the net residual-stream effect, and $\mathrm{Compress}$ tracks how much of the post-RMSNorm gradient is retained in the residual-stream contribution:
+In a pre-norm attention block, the forward computation follows $h_t^\ell \mapsto \widetilde h_t^\ell \mapsto r_t^{\mathrm{attn},\ell}$ through RMSNorm and attention, followed by the residual addition $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$. For a fixed layer and token, let $g_1 = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L} = \nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}$ denote the gradient arriving at this addition, and let $g_2 = \nabla_{\widetilde h_t^\ell}\mathcal{L}$ denote the gradient at the normalized attention input. Backpropagation through RMSNorm produces the branch contribution $g_3 = J_{\mathrm{RMSNorm}}(h_t^\ell)^\top g_2 = \nabla_{h_t^\ell}\mathcal{L} - g_1$. The skip path carries $g_1$ unchanged, so the total input gradient is $g_1+g_3$.
+
+We measure three stages of this backward flow. $\mathrm{Bloat}$ measures amplification through the attention branch from $g_1$ to $g_2$. $\mathrm{Change}$ measures the net change in residual-stream gradient norm after the branch contribution is added. $\mathrm{Compress}$ measures the norm gain through RMSNorm from $g_2$ to $g_3$, with values below one indicating attenuation.
 \begin{align}
 \mathrm{Bloat}_t^{\mathrm{attn},\ell}
-&:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2, 
+&:= \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}\|_2 = \|g_2\|_2 \,/\, \|g_1\|_2,
 \notag \\
 \mathrm{Change}_t^{\mathrm{attn},\ell}
-&:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2, 
+&:= \|\nabla_{h_t^\ell}\mathcal{L}\|_2 \,/\, \|\nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 = \|g_1+g_3\|_2 \,/\, \|g_1\|_2,
 \label{eq:ratios_attn}\\
 \mathrm{Compress}_t^{\mathrm{attn},\ell}
-&:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2.
+&:= \|\nabla_{h_t^\ell}\mathcal{L} - \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L}\|_2 \,/\, \|\nabla_{\widetilde h_t^\ell}\mathcal{L}\|_2 = \|g_3\|_2 \,/\, \|g_2\|_2.
 \notag
 \end{align}
-Analogously, we define $\mathrm{Bloat}_t^{\mathrm{mlp},\ell}$, $\mathrm{Change}_t^{\mathrm{mlp},\ell}$, and $\mathrm{Compress}_t^{\mathrm{mlp},\ell}$ for the MLP branch; those measurements are deferred to Appendix~\ref{app:mlp_reshaping}.
+The analogous definitions and measurements for the MLP branch appear in Appendix~\ref{app:mlp_reshaping}.
 
 \begin{figure}[tb]
     \centering
@@ -308,7 +310,7 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \section{Mechanistic Intervention and Validation}
 \label{sec:vscale}
 
-The previous sections predict that relieving localized gradient pressure during training should weaken MA while retaining attention sinks. We introduce V-scale to test this prediction and use a backward-only control to isolate the effect of gradient modulation. We then evaluate V-scale on language modeling and long-context retrieval.
+The previous sections predict that relieving localized gradient pressure during training should weaken MA while retaining attention sinks. We introduce V-scale to test this prediction and use a backward-only control to isolate the effect of gradient modulation. Matched pretraining runs allow us to test how this intervention changes the emergence of MA during optimization. We then evaluate V-scale on language modeling and long-context retrieval.
 
 The value path is the natural target channel to regulate gradients for three reasons.
 First, modifying only value states does not affect the attention weights that depend only on $Q$ and $K$.
@@ -412,6 +414,7 @@ We evaluate the 1B baseline and full V-scale models on standard language-modelin
     \caption{
     Representative standard downstream evaluation of 1B baseline and V-scale models under \texttt{bfloat16}.
     Lower perplexity (ppl) is better, while higher accuracy (acc) is better.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:main_standard_1b}
 	\setlength\tabcolsep{3pt}
     \begin{tabular}{lcccccccccc}
@@ -419,15 +422,20 @@ We evaluate the 1B baseline and full V-scale models on standard language-modelin
         \multirow{2}{*}{Model} & Wiki & \multicolumn{2}{c}{Lambada} & ARC-C & BoolQ & COPA & HellaSwag & OBQA & PIQA & WinoGrande \\
         & ppl$\downarrow$ & ppl$\downarrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ \\
         \midrule
-        Baseline & 22.84 & 15.27 & 43.28 & 24.91 & 51.38 & 69.00 & 51.59 & 31.40 & 72.52 & 54.22 \\
-        V-scale  & 22.83 & 15.91 & 43.37 & 27.05 & 56.27 & 70.00 & 51.29 & 32.80 & 71.49 & 53.28 \\
+        Baseline & 22.84 & \textbf{15.27} & 43.28 & 24.91 & 51.38 & 69.00 & \textbf{51.59} & 31.40 & \textbf{72.52} & \textbf{54.22} \\
+        V-scale  & \textbf{22.83} & 15.91 & \textbf{43.37} & \textbf{27.05} & \textbf{56.27} & \textbf{70.00} & 51.29 & \textbf{32.80} & 71.49 & 53.28 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
 As a further behavioral diagnostic, we evaluate Needle-in-a-Haystack (NIAH) retrieval under \texttt{bfloat16} and four post-training quantization methods: SmoothQuant (W8A8)~\cite{xiao2023smoothquant}, BitsAndBytes (BNB, W4A16)~\cite{dettmers2023qlora}, GPTQ (W4A16)~\cite{frantar2023optq}, and AWQ (W4A16)~\cite{lin2024awq}, where W$x$A$y$ denotes $x$-bit weights and $y$-bit activations. Table~\ref{tab:main_niah_multikey_1b} reports mean accuracy over $5$ evaluation seeds. V-scale outperforms the baseline in every tested combination of precision and context length, both within the native context and after YaRN extension~\cite{peng2024yarn}. At 8192 tokens, the gains range from $8.68$ to $15.04$ percentage points across \texttt{bfloat16} and the four quantization methods. The \texttt{bfloat16} result rises from $48.32\%$ to $62.00\%$. These consistent gains demonstrate improved retrieval when multiple key-value associations compete within a long context.
 
-Results on the harder single-needle task are mixed, with substantial drops in some GPTQ and AWQ settings after YaRN extension (Appendix~\ref{app:additional_downstream}). For example, AWQ accuracy at 4096 tokens falls from $78.24\%$ to $49.80\%$. The causes of these interactions remain unresolved. Quantization formats also affect how the results relate to MA suppression. BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while SmoothQuant compensates for activation outliers in W8A8. The retrieval gains therefore demonstrate benefits under these precision settings, while the effect of reduced activation ranges depends on the quantization scheme.
+A possible connection between the gains on multi-key NIAH, BoolQ, and ARC-C is their demand for selecting relevant information under competing cues. Multi-key NIAH requires retrieving the queried association among competing key-value pairs, while BoolQ requires finding evidence relevant to a question in a passage. ARC-C involves selecting and combining scientific information to distinguish plausible answer choices. The variation in learned V-scale parameters across layers and heads (Figure~\ref{fig:vscale_theta_heatmap}) suggests that the intervention may affect specialized information-selection pathways differently. Testing this explanation requires identifying the affected head functions and their contributions to each task.
+
+Results on the harder single-needle task are mixed, with substantial drops in some GPTQ and AWQ settings after YaRN extension (Appendix~\ref{app:additional_downstream}). For example, AWQ accuracy at 4096 tokens falls from $78.24\%$ to $49.80\%$. The causes of these interactions remain unresolved.
+
+\paragraph{Sensitivity to activation quantization}
+BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while SmoothQuant compensates for activation outliers at Linear inputs. To examine sensitivity to activation range more directly, we compare symmetric W8A8 quantization with dynamic per-token and calibrated static per-tensor activation scales (Appendix~\ref{app:activation_quantization}). Dynamic scaling keeps both models close to their \texttt{bfloat16} performance on standard tasks. With static scaling applied to all Linear modules except the output head, WikiText perplexity rises to $33.55$ for the baseline and $25.46$ for V-scale. At the native 2048-token context length, baseline accuracy falls to $0.00$--$2.76\%$ across the three NIAH variants, whereas V-scale retains $56.04$--$79.40\%$. Quantizing only the MLP \texttt{down\_proj} modules nearly reproduces this contrast. These results show that V-scale is less sensitive to a coarse, fixed activation range along the MLP pathway associated with its strongest MA reduction.
 
 \begin{table}[t]
     \centering
@@ -436,6 +444,7 @@ Results on the harder single-needle task are mixed, with substantial drops in so
     Main multi-key Needle-in-a-Haystack result for 1B models.
     Entries are mean retrieval accuracy percentages over $5$ random seeds; higher is better.
     We directly compare the baseline (B) and V-scale (V) models under native-context evaluation and YaRN extension with a factor of $4$.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:main_niah_multikey_1b}
     \begin{tabular}{l
         @{\hspace{6pt}}cc
@@ -457,11 +466,11 @@ Results on the harder single-needle task are mixed, with substantial drops in so
         \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}\cmidrule(lr){10-11}\cmidrule(lr){12-13}
         & B & V & B & V & B & V & B & V & B & V & B & V \\
         \midrule
-        \texttt{bfloat16} & 67.96 & 73.88 & 65.04 & 71.64 & 57.76 & 59.28 & 53.88 & 59.72 & 48.00 & 56.16 & 48.32 & 62.00 \\
-        SmoothQuant & 64.44 & 71.64 & 61.64 & 69.60 & 52.44 & 57.92 & 49.64 & 57.92 & 45.76 & 52.88 & 48.96 & 57.64 \\
-        BNB & 66.16 & 74.04 & 61.60 & 70.56 & 54.76 & 58.00 & 46.28 & 58.40 & 42.72 & 55.88 & 47.56 & 62.60 \\
-        GPTQ & 66.20 & 67.88 & 63.00 & 65.56 & 56.28 & 56.68 & 50.24 & 57.08 & 45.20 & 51.16 & 46.72 & 58.96 \\
-        AWQ & 63.96 & 66.84 & 61.68 & 67.76 & 54.04 & 59.24 & 49.32 & 59.00 & 42.52 & 49.64 & 47.04 & 58.48 \\
+        \texttt{bfloat16} & 67.96 & \textbf{73.88} & 65.04 & \textbf{71.64} & 57.76 & \textbf{59.28} & 53.88 & \textbf{59.72} & 48.00 & \textbf{56.16} & 48.32 & \textbf{62.00} \\
+        SmoothQuant & 64.44 & \textbf{71.64} & 61.64 & \textbf{69.60} & 52.44 & \textbf{57.92} & 49.64 & \textbf{57.92} & 45.76 & \textbf{52.88} & 48.96 & \textbf{57.64} \\
+        BNB & 66.16 & \textbf{74.04} & 61.60 & \textbf{70.56} & 54.76 & \textbf{58.00} & 46.28 & \textbf{58.40} & 42.72 & \textbf{55.88} & 47.56 & \textbf{62.60} \\
+        GPTQ & 66.20 & \textbf{67.88} & 63.00 & \textbf{65.56} & 56.28 & \textbf{56.68} & 50.24 & \textbf{57.08} & 45.20 & \textbf{51.16} & 46.72 & \textbf{58.96} \\
+        AWQ & 63.96 & \textbf{66.84} & 61.68 & \textbf{67.76} & 54.04 & \textbf{59.24} & 49.32 & \textbf{59.00} & 42.52 & \textbf{49.64} & 47.04 & \textbf{58.48} \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -523,79 +532,7 @@ Our proposed V-scale has a narrower purpose. It is designed as a mechanism test 
 As a central component in modern Transformers, layer normalization was introduced to stabilize hidden-state dynamics, and subsequent work showed that normalization placement in Transformer residual blocks strongly affects optimization and gradient transport~\cite{ba2016layernorm,xiong2020layernorm}. 
 RMSNorm removes mean-centering while preserving rescaling invariance, and it has become standard in Llama-like decoder-only models~\cite{zhang2019rmsnorm,touvron2023llama,grattafiori2024llama3herdmodels,qwen2.5,qwen3,glm2024chatglm}.
 In modern pre-norm RMSNorm Transformers, attention and MLP branches operate on normalized inputs, so very large residual-stream norms have a limited direct role in the forward branch computation. This naturally motivates us to ask how normalization shapes backward signal propagation during training.
-Qiu and Yao~\cite{qiu2026flash} study how numerical errors in low-precision FlashAttention accumulate through training dynamics and lead to instability. Our work examines a complementary mechanism that how attention-induced gradient concentration is regulated through activation scale in pre-norm Transformers.
-
-\iffalse
-\begin{table}[ht]
-	\centering
-	\small
-	\setlength\tabcolsep{1pt}
-	\begin{tabular}{C{1.5cm} C{5cm} C{2.5cm} C{4.5cm}}
-		\toprule
-		\textbf{Work} & \textbf{Main idea} & \textbf{Overlap with ours} & \textbf{Key difference / our contribution} \\ 
-		\midrule
-		
-		Bondarenko et al. (2023) 
-		& Activation outliers arise from heads implementing ``no-op'' behavior under softmax; propose clipped softmax and gating 
-		& Optimization-based explanation of extreme activations 
-		& Does not identify token-level gradient concentration or an explicit mediator linking AS and MA \\ \midrule
-		
-		Sun et al. (2024) 
-		& Massive activations are widespread and act as bias terms affecting attention 
-		& Links MA with attention behavior 
-		& Primarily forward/functional view; no backward-pass mediator \\ \midrule
-		
-		Gu et al. (2025) 
-		& Empirical study of when attention sinks emerge 
-		& Strong characterization of AS 
-		& No mechanism connecting AS to MA \\ \midrule
-		
-		Guo et al. (2025) 
-		& Training-time mutual reinforcement explains extreme-token phenomena 
-		& Closest prior mechanistic work 
-		& No explicit formulation of gradient sinks or RMSNorm-based response \\ \midrule
-		
-		Barbero et al. (2025) 
-		& First-token attention avoids over-mixing 
-		& Functional explanation of AS 
-		& Does not address MA or gradient dynamics \\ \midrule
-		
-		Queipo-de-Llano et al. (2026) 
-		& Connects attention sinks and compression valleys via massive activations 
-		& Links AS and MA 
-		& Treats MA as primary driver; we instead identify GS as mediator \\ \midrule
-		
-		Sun et al. (2026) 
-		& AS/MA co-occurrence is a pre-norm architectural artifact 
-		& Alternative explanation of coupling 
-		& Focuses on architecture; we focus on training dynamics \\ \midrule
-		
-		Softpick (2025) 
-		& Modifies softmax to remove AS and MA 
-		& Intervention on same phenomena 
-		& Alters forward geometry; not a targeted causal test \\ \midrule
-		
-		Gated Attention (2025) 
-		& Uses output gating to mitigate extreme-token behavior 
-		& Large-scale mitigation 
-		& Not designed to isolate causal mechanism \\ \midrule
-		
-		VGA (2025) 
-		& Value-state gating based on gradient analysis 
-		& Closest intervention method 
-		& Does not isolate a minimal mechanism preserving AS while suppressing MA \\ \midrule
-		
-		\textbf{Ours} 
-		& AS induces GS; MA arises as RMSNorm-mediated response; V-scale intervention 
-		& --- 
-		& Identifies GS as explicit mediator and provides sink-preserving causal validation \\ 
-		
-		\bottomrule
-	\end{tabular}
-	\caption{Comparison with existing works on attention sinks, massive activations, and mitigation methods.}
-	\label{tab:related}
-\end{table}
-\fi
+Qiu and Yao~\cite{qiu2026flash} study how numerical errors in low-precision FlashAttention accumulate through training dynamics and lead to instability. Our work examines how attention-induced gradient concentration is regulated through activation scale in pre-norm Transformers.
 
 \clearpage
 
@@ -815,9 +752,9 @@ Token 0 remains the largest-gradient position but the remaining concentration is
 
 This subsection reports additional downstream evaluations, supplementing the compact summary in Section~\ref{sec:vscale}.
 We focus on 1B models because this is the largest scratch-trained setting in our study, avoiding a largely redundant expansion of the appendix.
-We pair each baseline with its V-scale counterpart and evaluate language modeling, reasoning, and retrieval in \texttt{bfloat16} and under post-training quantization. These measurements primarily check whether suppressing massive activations preserves ordinary language-modeling and reasoning behavior across precision settings, rather than establishing uniform practical superiority.
+We pair each baseline with its V-scale counterpart and evaluate language modeling, reasoning, and retrieval in \texttt{bfloat16} and under post-training quantization. These measurements assess how the intervention affects downstream capability across precision settings.
 
-Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive on standard evaluations. Perplexities are nearly unchanged, and most accuracy columns move only modestly. V-scale improves ARC-C, BoolQ, COPA, and OpenBookQA under most precision settings, while several other tasks decrease slightly. Thus the value-path intervention does not appear to sacrifice basic downstream capability.
+Table~\ref{tab:additional_downstream_1b} shows that V-scale maintains similar perplexity and improves ARC-C, BoolQ, COPA, and OpenBookQA under every listed precision setting. Several other tasks show small decreases. Together with the consistent multi-key retrieval gains below, these results show that suppressing MA preserves overall language-model capability and benefits several tasks requiring selective information use.
 
 \begin{table}[ht]
     \centering
@@ -827,6 +764,7 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
     Wiki ppl and Lambada ppl are perplexities, where lower is better.
     Lambada acc, ARC-C/E (AI2 Reasoning Challenge and Easy splits), BoolQ, COPA, HellaSwag, OBQA (OpenBookQA), PIQA, SCIQ, and WinoGrande are zero-shot accuracies in percent, where higher is better.
     V-scale keeps perplexity nearly unchanged and remains broadly comparable to the baseline across reasoning tasks, with gains on ARC-C, BoolQ, COPA, and OBQA and small drops on several other tasks.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting. Ties are bolded in both rows.
     }\label{tab:additional_downstream_1b}
     \setlength\tabcolsep{3pt}
     \begin{tabular}{llccccccc}
@@ -836,16 +774,16 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
         \multirow{2}{*}{Model} & \multirow{2}{*}{Quantization} & Wiki & \multicolumn{2}{c}{Lambada} & ARC-C & ARC-E & BoolQ & COPA \\
         & & ppl$\downarrow$ & ppl$\downarrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ & acc$\uparrow$ \\
         \midrule
-        Baseline & bfloat16 & 22.84 & 15.27 & 43.28 & 24.91 & 47.98 & 51.38 & 69.00 \\
-        V-scale & bfloat16 & 22.83 & 15.91 & 43.37 & 27.05 & 47.47 & 56.27 & 70.00 \\
-        Baseline & SmoothQuant & 23.17 & 16.61 & 43.02 & 25.26 & 47.47 & 50.92 & 67.00 \\
-        V-scale & SmoothQuant & 23.01 & 16.58 & 43.14 & 26.11 & 46.76 & 55.57 & 69.00 \\
-        Baseline & BNB & 23.49 & 16.40 & 42.73 & 25.00 & 47.43 & 54.19 & 72.00 \\
-        V-scale & BNB & 23.40 & 15.86 & 43.55 & 27.56 & 47.05 & 55.96 & 74.00 \\
-        Baseline & GPTQ & 23.21 & 15.70 & 43.26 & 25.77 & 48.48 & 52.54 & 68.00 \\
-        V-scale & GPTQ & 23.17 & 16.48 & 43.76 & 26.79 & 46.80 & 56.45 & 70.00 \\
-        Baseline & AWQ & 23.32 & 16.34 & 42.44 & 25.26 & 48.06 & 53.64 & 68.00 \\
-        V-scale & AWQ & 23.36 & 16.95 & 43.06 & 26.71 & 47.10 & 55.96 & 69.00 \\
+        Baseline & bfloat16 & 22.84 & \textbf{15.27} & 43.28 & 24.91 & \textbf{47.98} & 51.38 & 69.00 \\
+        V-scale & bfloat16 & \textbf{22.83} & 15.91 & \textbf{43.37} & \textbf{27.05} & 47.47 & \textbf{56.27} & \textbf{70.00} \\
+        Baseline & SmoothQuant & 23.17 & 16.61 & 43.02 & 25.26 & \textbf{47.47} & 50.92 & 67.00 \\
+        V-scale & SmoothQuant & \textbf{23.01} & \textbf{16.58} & \textbf{43.14} & \textbf{26.11} & 46.76 & \textbf{55.57} & \textbf{69.00} \\
+        Baseline & BNB & 23.49 & 16.40 & 42.73 & 25.00 & \textbf{47.43} & 54.19 & 72.00 \\
+        V-scale & BNB & \textbf{23.40} & \textbf{15.86} & \textbf{43.55} & \textbf{27.56} & 47.05 & \textbf{55.96} & \textbf{74.00} \\
+        Baseline & GPTQ & 23.21 & \textbf{15.70} & 43.26 & 25.77 & \textbf{48.48} & 52.54 & 68.00 \\
+        V-scale & GPTQ & \textbf{23.17} & 16.48 & \textbf{43.76} & \textbf{26.79} & 46.80 & \textbf{56.45} & \textbf{70.00} \\
+        Baseline & AWQ & \textbf{23.32} & \textbf{16.34} & 42.44 & 25.26 & \textbf{48.06} & 53.64 & 68.00 \\
+        V-scale & AWQ & 23.36 & 16.95 & \textbf{43.06} & \textbf{26.71} & 47.10 & \textbf{55.96} & \textbf{69.00} \\
         \bottomrule
     \end{tabular}
     \begin{tabular}{llccccc}
@@ -854,16 +792,16 @@ Table~\ref{tab:additional_downstream_1b} shows that V-scale remains competitive 
         \midrule
         Model & Quantization & HellaSwag & OBQA & PIQA & SCIQ & WinoGrande \\
         \midrule
-        Baseline & bfloat16 & 51.59 & 31.40 & 72.52 & 69.90 & 54.22 \\
-        V-scale & bfloat16 & 51.29 & 32.80 & 71.49 & 69.30 & 53.28 \\
-        Baseline & SmoothQuant & 51.49 & 30.80 & 72.47 & 69.00 & 55.17 \\
-        V-scale & SmoothQuant & 51.13 & 32.40 & 71.00 & 68.30 & 54.46 \\
-        Baseline & BNB & 51.59 & 31.40 & 73.01 & 69.20 & 55.56 \\
-        V-scale & BNB & 51.29 & 32.80 & 71.27 & 69.50 & 54.14 \\
-        Baseline & GPTQ & 51.61 & 31.60 & 72.85 & 69.20 & 54.70 \\
-        V-scale & GPTQ & 51.31 & 32.40 & 71.44 & 68.40 & 54.70 \\
-        Baseline & AWQ & 51.23 & 30.60 & 72.47 & 69.40 & 54.30 \\
-        V-scale & AWQ & 50.88 & 33.20 & 71.65 & 69.10 & 53.51 \\
+        Baseline & bfloat16 & \textbf{51.59} & 31.40 & \textbf{72.52} & \textbf{69.90} & \textbf{54.22} \\
+        V-scale & bfloat16 & 51.29 & \textbf{32.80} & 71.49 & 69.30 & 53.28 \\
+        Baseline & SmoothQuant & \textbf{51.49} & 30.80 & \textbf{72.47} & \textbf{69.00} & \textbf{55.17} \\
+        V-scale & SmoothQuant & 51.13 & \textbf{32.40} & 71.00 & 68.30 & 54.46 \\
+        Baseline & BNB & \textbf{51.59} & 31.40 & \textbf{73.01} & 69.20 & \textbf{55.56} \\
+        V-scale & BNB & 51.29 & \textbf{32.80} & 71.27 & \textbf{69.50} & 54.14 \\
+        Baseline & GPTQ & \textbf{51.61} & 31.60 & \textbf{72.85} & \textbf{69.20} & \textbf{54.70} \\
+        V-scale & GPTQ & 51.31 & \textbf{32.40} & 71.44 & 68.40 & \textbf{54.70} \\
+        Baseline & AWQ & \textbf{51.23} & 30.60 & \textbf{72.47} & \textbf{69.40} & \textbf{54.30} \\
+        V-scale & AWQ & 50.88 & \textbf{33.20} & 71.65 & 69.10 & 53.51 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -881,34 +819,35 @@ The harder single-needle template in Table~\ref{tab:niah_single3_1b} gives mixed
     Blank cells therefore indicate untested longer contexts rather than failed runs.
     The second block evaluates the same models after YaRN extension with a factor of $4$, enabling 4096- and 8192-token tests.
     This template is nearly saturated at shorter lengths, but V-scale gives consistently higher accuracy at 8192 tokens after YaRN extension.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:niah_single2_1b}
     \begin{tabular}{llcccc}
         \toprule
         Model & Quantization & 1024 & 2048 & 4096 & 8192 \\
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
-        Baseline & bfloat16 & $99.96_{\pm 0.09}$ & $98.00_{\pm 0.69}$ & & \\
-        V-scale & bfloat16 & $100.00_{\pm 0.00}$ & $97.80_{\pm 0.42}$ & & \\
-        Baseline & SmoothQuant & $99.96_{\pm 0.09}$ & $95.92_{\pm 2.09}$ & & \\
-        V-scale & SmoothQuant & $100.00_{\pm 0.00}$ & $95.64_{\pm 0.99}$ & & \\
-        Baseline & BNB & $99.88_{\pm 0.18}$ & $98.36_{\pm 0.86}$ & & \\
-        V-scale & BNB & $100.00_{\pm 0.00}$ & $95.76_{\pm 0.84}$ & & \\
+        Baseline & bfloat16 & $99.96_{\pm 0.09}$ & $\mathbf{98.00}_{\pm 0.69}$ & & \\
+        V-scale & bfloat16 & $\mathbf{100.00}_{\pm 0.00}$ & $97.80_{\pm 0.42}$ & & \\
+        Baseline & SmoothQuant & $99.96_{\pm 0.09}$ & $\mathbf{95.92}_{\pm 2.09}$ & & \\
+        V-scale & SmoothQuant & $\mathbf{100.00}_{\pm 0.00}$ & $95.64_{\pm 0.99}$ & & \\
+        Baseline & BNB & $99.88_{\pm 0.18}$ & $\mathbf{98.36}_{\pm 0.86}$ & & \\
+        V-scale & BNB & $\mathbf{100.00}_{\pm 0.00}$ & $95.76_{\pm 0.84}$ & & \\
         Baseline & GPTQ & $99.92_{\pm 0.11}$ & $94.64_{\pm 1.56}$ & & \\
-        V-scale & GPTQ & $100.00_{\pm 0.00}$ & $96.68_{\pm 0.46}$ & & \\
+        V-scale & GPTQ & $\mathbf{100.00}_{\pm 0.00}$ & $\mathbf{96.68}_{\pm 0.46}$ & & \\
         Baseline & AWQ & $99.92_{\pm 0.11}$ & $96.56_{\pm 1.24}$ & & \\
-        V-scale & AWQ & $100.00_{\pm 0.00}$ & $97.20_{\pm 0.71}$ & & \\
+        V-scale & AWQ & $\mathbf{100.00}_{\pm 0.00}$ & $\mathbf{97.20}_{\pm 0.71}$ & & \\
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN Extension} (yarn\_factor$=4$)} \\
-        Baseline & bfloat16 & $99.84_{\pm 0.22}$ & $98.64_{\pm 0.26}$ & $98.20_{\pm 0.66}$ & $94.20_{\pm 0.75}$ \\
-        V-scale & bfloat16 & $99.40_{\pm 0.40}$ & $99.56_{\pm 0.38}$ & $98.32_{\pm 0.41}$ & $99.04_{\pm 0.33}$ \\
-        Baseline & SmoothQuant & $99.72_{\pm 0.23}$ & $97.48_{\pm 0.84}$ & $93.24_{\pm 1.21}$ & $88.40_{\pm 1.67}$ \\
-        V-scale & SmoothQuant & $98.52_{\pm 0.30}$ & $97.96_{\pm 0.17}$ & $93.72_{\pm 0.63}$ & $96.16_{\pm 0.70}$ \\
+        Baseline & bfloat16 & $\mathbf{99.84}_{\pm 0.22}$ & $98.64_{\pm 0.26}$ & $98.20_{\pm 0.66}$ & $94.20_{\pm 0.75}$ \\
+        V-scale & bfloat16 & $99.40_{\pm 0.40}$ & $\mathbf{99.56}_{\pm 0.38}$ & $\mathbf{98.32}_{\pm 0.41}$ & $\mathbf{99.04}_{\pm 0.33}$ \\
+        Baseline & SmoothQuant & $\mathbf{99.72}_{\pm 0.23}$ & $97.48_{\pm 0.84}$ & $93.24_{\pm 1.21}$ & $88.40_{\pm 1.67}$ \\
+        V-scale & SmoothQuant & $98.52_{\pm 0.30}$ & $\mathbf{97.96}_{\pm 0.17}$ & $\mathbf{93.72}_{\pm 0.63}$ & $\mathbf{96.16}_{\pm 0.70}$ \\
         Baseline & BNB & $99.60_{\pm 0.37}$ & $99.20_{\pm 0.37}$ & $98.12_{\pm 0.87}$ & $93.32_{\pm 0.77}$ \\
-        V-scale & BNB & $99.76_{\pm 0.17}$ & $99.96_{\pm 0.09}$ & $99.40_{\pm 0.35}$ & $98.52_{\pm 0.50}$ \\
-        Baseline & GPTQ & $99.80_{\pm 0.20}$ & $97.32_{\pm 0.61}$ & $96.92_{\pm 0.44}$ & $93.08_{\pm 1.18}$ \\
-        V-scale & GPTQ & $99.64_{\pm 0.22}$ & $98.96_{\pm 0.43}$ & $93.52_{\pm 1.14}$ & $97.72_{\pm 0.27}$ \\
-        Baseline & AWQ & $99.72_{\pm 0.23}$ & $97.44_{\pm 0.54}$ & $94.60_{\pm 1.02}$ & $90.84_{\pm 1.07}$ \\
-        V-scale & AWQ & $96.96_{\pm 0.77}$ & $94.56_{\pm 0.52}$ & $92.36_{\pm 1.40}$ & $98.32_{\pm 0.84}$ \\
+        V-scale & BNB & $\mathbf{99.76}_{\pm 0.17}$ & $\mathbf{99.96}_{\pm 0.09}$ & $\mathbf{99.40}_{\pm 0.35}$ & $\mathbf{98.52}_{\pm 0.50}$ \\
+        Baseline & GPTQ & $\mathbf{99.80}_{\pm 0.20}$ & $97.32_{\pm 0.61}$ & $\mathbf{96.92}_{\pm 0.44}$ & $93.08_{\pm 1.18}$ \\
+        V-scale & GPTQ & $99.64_{\pm 0.22}$ & $\mathbf{98.96}_{\pm 0.43}$ & $93.52_{\pm 1.14}$ & $\mathbf{97.72}_{\pm 0.27}$ \\
+        Baseline & AWQ & $\mathbf{99.72}_{\pm 0.23}$ & $\mathbf{97.44}_{\pm 0.54}$ & $\mathbf{94.60}_{\pm 1.02}$ & $90.84_{\pm 1.07}$ \\
+        V-scale & AWQ & $96.96_{\pm 0.77}$ & $94.56_{\pm 0.52}$ & $92.36_{\pm 1.40}$ & $\mathbf{98.32}_{\pm 0.84}$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -921,33 +860,34 @@ The harder single-needle template in Table~\ref{tab:niah_single3_1b} gives mixed
     The first block reports native-context evaluation up to 2048 tokens, while the second block uses YaRN extension with a factor of $4$ to evaluate up to 8192 tokens.
     On native 2048-token evaluation, V-scale improves over the baseline for \texttt{bfloat16}, SmoothQuant, BNB, and GPTQ, with AWQ as the exception.
     After YaRN extension, the result is mixed, with gains in several 2048-token and BNB settings but degradation under some 4096- and 8192-token quantized settings.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:niah_single3_1b}
     \begin{tabular}{llcccc}
         \toprule
         Model & Quantization & 1024 & 2048 & 4096 & 8192 \\
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
-        Baseline & bfloat16 & $99.68_{\pm 0.11}$ & $85.48_{\pm 1.24}$ & & \\
-        V-scale & bfloat16 & $98.60_{\pm 0.79}$ & $95.60_{\pm 0.95}$ & & \\
-        Baseline & SmoothQuant & $99.00_{\pm 0.28}$ & $79.28_{\pm 0.93}$ & & \\
-        V-scale & SmoothQuant & $96.00_{\pm 0.84}$ & $88.48_{\pm 0.46}$ & & \\
+        Baseline & bfloat16 & $\mathbf{99.68}_{\pm 0.11}$ & $85.48_{\pm 1.24}$ & & \\
+        V-scale & bfloat16 & $98.60_{\pm 0.79}$ & $\mathbf{95.60}_{\pm 0.95}$ & & \\
+        Baseline & SmoothQuant & $\mathbf{99.00}_{\pm 0.28}$ & $79.28_{\pm 0.93}$ & & \\
+        V-scale & SmoothQuant & $96.00_{\pm 0.84}$ & $\mathbf{88.48}_{\pm 0.46}$ & & \\
         Baseline & BNB & $99.32_{\pm 0.18}$ & $79.80_{\pm 1.29}$ & & \\
-        V-scale & BNB & $99.44_{\pm 0.48}$ & $96.40_{\pm 0.51}$ & & \\
-        Baseline & GPTQ & $99.44_{\pm 0.26}$ & $85.84_{\pm 1.88}$ & & \\
-        V-scale & GPTQ & $98.84_{\pm 0.75}$ & $95.84_{\pm 1.13}$ & & \\
-        Baseline & AWQ & $99.44_{\pm 0.26}$ & $96.16_{\pm 1.25}$ & & \\
+        V-scale & BNB & $\mathbf{99.44}_{\pm 0.48}$ & $\mathbf{96.40}_{\pm 0.51}$ & & \\
+        Baseline & GPTQ & $\mathbf{99.44}_{\pm 0.26}$ & $85.84_{\pm 1.88}$ & & \\
+        V-scale & GPTQ & $98.84_{\pm 0.75}$ & $\mathbf{95.84}_{\pm 1.13}$ & & \\
+        Baseline & AWQ & $\mathbf{99.44}_{\pm 0.26}$ & $\mathbf{96.16}_{\pm 1.25}$ & & \\
         V-scale & AWQ & $91.96_{\pm 1.01}$ & $85.20_{\pm 1.54}$ & & \\
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN Extension} (yarn\_factor$=4$)} \\
-        Baseline & bfloat16 & $98.96_{\pm 0.26}$ & $91.56_{\pm 2.03}$ & $79.48_{\pm 1.08}$ & $75.68_{\pm 1.51}$ \\
-        V-scale & bfloat16 & $99.08_{\pm 0.70}$ & $94.36_{\pm 1.01}$ & $77.16_{\pm 1.42}$ & $73.52_{\pm 1.10}$ \\
-        Baseline & SmoothQuant & $97.00_{\pm 0.82}$ & $80.12_{\pm 2.11}$ & $71.96_{\pm 2.07}$ & $64.00_{\pm 1.38}$ \\
-        V-scale & SmoothQuant & $98.56_{\pm 0.84}$ & $84.84_{\pm 1.15}$ & $64.72_{\pm 1.57}$ & $66.92_{\pm 1.20}$ \\
-        Baseline & BNB & $98.60_{\pm 0.63}$ & $89.64_{\pm 1.11}$ & $75.68_{\pm 1.14}$ & $75.52_{\pm 2.39}$ \\
-        V-scale & BNB & $99.16_{\pm 0.48}$ & $98.64_{\pm 0.46}$ & $82.52_{\pm 0.94}$ & $71.72_{\pm 1.98}$ \\
-        Baseline & GPTQ & $98.92_{\pm 0.23}$ & $90.68_{\pm 1.30}$ & $75.72_{\pm 1.32}$ & $73.68_{\pm 0.70}$ \\
-        V-scale & GPTQ & $99.36_{\pm 0.57}$ & $94.36_{\pm 0.99}$ & $61.04_{\pm 1.58}$ & $69.20_{\pm 1.97}$ \\
-        Baseline & AWQ & $98.76_{\pm 0.52}$ & $96.56_{\pm 0.50}$ & $78.24_{\pm 0.74}$ & $74.20_{\pm 1.83}$ \\
+        Baseline & bfloat16 & $98.96_{\pm 0.26}$ & $91.56_{\pm 2.03}$ & $\mathbf{79.48}_{\pm 1.08}$ & $\mathbf{75.68}_{\pm 1.51}$ \\
+        V-scale & bfloat16 & $\mathbf{99.08}_{\pm 0.70}$ & $\mathbf{94.36}_{\pm 1.01}$ & $77.16_{\pm 1.42}$ & $73.52_{\pm 1.10}$ \\
+        Baseline & SmoothQuant & $97.00_{\pm 0.82}$ & $80.12_{\pm 2.11}$ & $\mathbf{71.96}_{\pm 2.07}$ & $64.00_{\pm 1.38}$ \\
+        V-scale & SmoothQuant & $\mathbf{98.56}_{\pm 0.84}$ & $\mathbf{84.84}_{\pm 1.15}$ & $64.72_{\pm 1.57}$ & $\mathbf{66.92}_{\pm 1.20}$ \\
+        Baseline & BNB & $98.60_{\pm 0.63}$ & $89.64_{\pm 1.11}$ & $75.68_{\pm 1.14}$ & $\mathbf{75.52}_{\pm 2.39}$ \\
+        V-scale & BNB & $\mathbf{99.16}_{\pm 0.48}$ & $\mathbf{98.64}_{\pm 0.46}$ & $\mathbf{82.52}_{\pm 0.94}$ & $71.72_{\pm 1.98}$ \\
+        Baseline & GPTQ & $98.92_{\pm 0.23}$ & $90.68_{\pm 1.30}$ & $\mathbf{75.72}_{\pm 1.32}$ & $\mathbf{73.68}_{\pm 0.70}$ \\
+        V-scale & GPTQ & $\mathbf{99.36}_{\pm 0.57}$ & $\mathbf{94.36}_{\pm 0.99}$ & $61.04_{\pm 1.58}$ & $69.20_{\pm 1.97}$ \\
+        Baseline & AWQ & $\mathbf{98.76}_{\pm 0.52}$ & $\mathbf{96.56}_{\pm 0.50}$ & $\mathbf{78.24}_{\pm 0.74}$ & $\mathbf{74.20}_{\pm 1.83}$ \\
         V-scale & AWQ & $98.24_{\pm 0.75}$ & $87.84_{\pm 1.11}$ & $49.80_{\pm 1.73}$ & $70.56_{\pm 1.98}$ \\
         \bottomrule
     \end{tabular}
@@ -961,6 +901,7 @@ The harder single-needle template in Table~\ref{tab:niah_single3_1b} gives mixed
     Columns denote context length in tokens, and entries are mean accuracy percentages with standard deviations over $5$ random seeds; higher is better.
     Native-context models are evaluated at 1024 and 2048 tokens, and YaRN-extended models with a factor of $4$ are evaluated up to 8192 tokens.
     V-scale improves every listed precision/quantization and context-length combination, with especially large gains at 8192 tokens after YaRN extension.
+    Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:niah_multikey1_1b}
     \begin{tabular}{llcccc}
         \toprule
@@ -968,30 +909,82 @@ The harder single-needle template in Table~\ref{tab:niah_single3_1b} gives mixed
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models}} \\
         Baseline & bfloat16 & $67.96_{\pm 1.34}$ & $65.04_{\pm 1.09}$ & & \\
-        V-scale & bfloat16 & $73.88_{\pm 1.06}$ & $71.64_{\pm 3.46}$ & & \\
+        V-scale & bfloat16 & $\mathbf{73.88}_{\pm 1.06}$ & $\mathbf{71.64}_{\pm 3.46}$ & & \\
         Baseline & SmoothQuant & $64.44_{\pm 1.43}$ & $61.64_{\pm 2.91}$ & & \\
-        V-scale & SmoothQuant & $71.64_{\pm 1.44}$ & $69.60_{\pm 2.19}$ & & \\
+        V-scale & SmoothQuant & $\mathbf{71.64}_{\pm 1.44}$ & $\mathbf{69.60}_{\pm 2.19}$ & & \\
         Baseline & BNB & $66.16_{\pm 1.68}$ & $61.60_{\pm 1.83}$ & & \\
-        V-scale & BNB & $74.04_{\pm 1.65}$ & $70.56_{\pm 2.19}$ & & \\
+        V-scale & BNB & $\mathbf{74.04}_{\pm 1.65}$ & $\mathbf{70.56}_{\pm 2.19}$ & & \\
         Baseline & GPTQ & $66.20_{\pm 1.12}$ & $63.00_{\pm 1.54}$ & & \\
-        V-scale & GPTQ & $67.88_{\pm 1.06}$ & $65.56_{\pm 2.25}$ & & \\
+        V-scale & GPTQ & $\mathbf{67.88}_{\pm 1.06}$ & $\mathbf{65.56}_{\pm 2.25}$ & & \\
         Baseline & AWQ & $63.96_{\pm 2.10}$ & $61.68_{\pm 1.52}$ & & \\
-        V-scale & AWQ & $66.84_{\pm 1.75}$ & $67.76_{\pm 3.10}$ & & \\
+        V-scale & AWQ & $\mathbf{66.84}_{\pm 1.75}$ & $\mathbf{67.76}_{\pm 3.10}$ & & \\
         \midrule
         \rowcolor[gray]{0.9}\multicolumn{6}{l}{\emph{1B Models with YaRN Extension} (yarn\_factor$=4$)} \\
         Baseline & bfloat16 & $57.76_{\pm 2.29}$ & $53.88_{\pm 1.42}$ & $48.00_{\pm 2.58}$ & $48.32_{\pm 1.85}$ \\
-        V-scale & bfloat16 & $59.28_{\pm 1.77}$ & $59.72_{\pm 2.33}$ & $56.16_{\pm 2.39}$ & $62.00_{\pm 1.88}$ \\
+        V-scale & bfloat16 & $\mathbf{59.28}_{\pm 1.77}$ & $\mathbf{59.72}_{\pm 2.33}$ & $\mathbf{56.16}_{\pm 2.39}$ & $\mathbf{62.00}_{\pm 1.88}$ \\
         Baseline & SmoothQuant & $52.44_{\pm 1.84}$ & $49.64_{\pm 1.73}$ & $45.76_{\pm 2.17}$ & $48.96_{\pm 1.89}$ \\
-        V-scale & SmoothQuant & $57.92_{\pm 2.26}$ & $57.92_{\pm 1.98}$ & $52.88_{\pm 1.18}$ & $57.64_{\pm 1.28}$ \\
+        V-scale & SmoothQuant & $\mathbf{57.92}_{\pm 2.26}$ & $\mathbf{57.92}_{\pm 1.98}$ & $\mathbf{52.88}_{\pm 1.18}$ & $\mathbf{57.64}_{\pm 1.28}$ \\
         Baseline & BNB & $54.76_{\pm 2.60}$ & $46.28_{\pm 1.38}$ & $42.72_{\pm 2.96}$ & $47.56_{\pm 2.22}$ \\
-        V-scale & BNB & $58.00_{\pm 2.40}$ & $58.40_{\pm 2.20}$ & $55.88_{\pm 1.43}$ & $62.60_{\pm 1.06}$ \\
+        V-scale & BNB & $\mathbf{58.00}_{\pm 2.40}$ & $\mathbf{58.40}_{\pm 2.20}$ & $\mathbf{55.88}_{\pm 1.43}$ & $\mathbf{62.60}_{\pm 1.06}$ \\
         Baseline & GPTQ & $56.28_{\pm 1.64}$ & $50.24_{\pm 0.84}$ & $45.20_{\pm 2.81}$ & $46.72_{\pm 1.56}$ \\
-        V-scale & GPTQ & $56.68_{\pm 1.36}$ & $57.08_{\pm 0.91}$ & $51.16_{\pm 1.61}$ & $58.96_{\pm 2.20}$ \\
+        V-scale & GPTQ & $\mathbf{56.68}_{\pm 1.36}$ & $\mathbf{57.08}_{\pm 0.91}$ & $\mathbf{51.16}_{\pm 1.61}$ & $\mathbf{58.96}_{\pm 2.20}$ \\
         Baseline & AWQ & $54.04_{\pm 1.91}$ & $49.32_{\pm 2.02}$ & $42.52_{\pm 2.98}$ & $47.04_{\pm 2.04}$ \\
-        V-scale & AWQ & $59.24_{\pm 1.31}$ & $59.00_{\pm 1.46}$ & $49.64_{\pm 1.95}$ & $58.48_{\pm 2.02}$ \\
+        V-scale & AWQ & $\mathbf{59.24}_{\pm 1.31}$ & $\mathbf{59.00}_{\pm 1.46}$ & $\mathbf{49.64}_{\pm 1.95}$ & $\mathbf{58.48}_{\pm 2.02}$ \\
         \bottomrule
     \end{tabular}
 \end{table}
+
+\subsection{Controlled activation quantization}\label{app:activation_quantization}
+
+We evaluate the 1B baseline and V-scale models under three symmetric INT8 configurations to examine sensitivity to activation range. In the \emph{all-Linear dynamic-token} setting, every Linear module except \texttt{lm\_head} uses static per-channel INT8 weights and dynamic per-token INT8 input activations. The \emph{all-Linear static-tensor} setting keeps the same target modules and weight format, and uses MinMax observers to calibrate a static per-tensor activation scale. The \emph{down-projection-only static-tensor} setting applies the same static weight and activation formats only to modules matching \texttt{mlp.down\_proj}.
+
+The calibration data, sample count, and sequence length follow the corresponding original quantization evaluations. The downstream task configurations are also unchanged. NIAH uses the native 2048-token context and the same five evaluation seeds as the corresponding experiments in Appendix~\ref{app:additional_downstream}. Dynamic per-token scaling adapts to each token's activation range. Static per-tensor scaling shares a calibrated range across tokens, exposing sensitivity to activation outliers. Restricting this quantization to the MLP down-projection tests the pathway associated with the strongest MA reduction in Figure~\ref{fig:vscale_as_ma_compare}. These settings serve as controlled diagnostics of sensitivity to a fixed activation range.
+
+\begin{table}[ht]
+    \centering
+    \caption{
+    Standard downstream results under controlled activation quantization for 1B models. Each metric compares the baseline (B) and V-scale (V). Mean accuracy is the unweighted average of the ten accuracy metrics in Table~\ref{tab:additional_downstream_1b}. Bold marks the better result within each pair.
+    }\label{tab:activation_quantization_standard}
+    \begin{tabular}{lcccccc}
+        \toprule
+        & \multicolumn{2}{c}{WikiText PPL$\downarrow$}
+        & \multicolumn{2}{c}{LAMBADA PPL$\downarrow$}
+        & \multicolumn{2}{c}{Mean acc. (\%)$\uparrow$} \\
+        \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+        Setting & B & V & B & V & B & V \\
+        \midrule
+        \texttt{bfloat16} & 22.84 & \textbf{22.83} & \textbf{15.27} & 15.91 & 51.62 & \textbf{52.23} \\
+        All Linear, dynamic-token W8A8 & 23.16 & \textbf{23.04} & \textbf{16.35} & 16.90 & 51.77 & \textbf{52.21} \\
+        All Linear, static-tensor W8A8 & 33.55 & \textbf{25.46} & 46.85 & \textbf{23.65} & 48.54 & \textbf{50.55} \\
+        \texttt{down\_proj} only, static-tensor W8A8 & 32.94 & \textbf{25.21} & 43.63 & \textbf{23.07} & 48.37 & \textbf{50.67} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Table~\ref{tab:activation_quantization_standard} shows that both models remain close to their \texttt{bfloat16} performance under dynamic per-token scaling. Static per-tensor scaling yields a much larger separation. With all Linear modules quantized, LAMBADA perplexity reaches $46.85$ for the baseline and $23.65$ for V-scale, while mean accuracy is $48.54\%$ and $50.55\%$, respectively. Quantizing only the MLP down-projection produces similar perplexities and accuracies, locating most of the observed sensitivity in this pathway.
+
+\begin{table}[ht]
+    \centering
+    \caption{
+    NIAH retrieval under controlled activation quantization at the native 2048-token context length. Single-2, Single-3, and Multi-key denote the same templates as Tables~\ref{tab:niah_single2_1b}--\ref{tab:niah_multikey1_1b}. Entries are mean accuracy percentages over five evaluation seeds. Higher is better, and bold marks the better result within each baseline (B) and V-scale (V) pair.
+    }\label{tab:activation_quantization_niah}
+    \begin{tabular}{lcccccc}
+        \toprule
+        & \multicolumn{2}{c}{Single-2}
+        & \multicolumn{2}{c}{Single-3}
+        & \multicolumn{2}{c}{Multi-key} \\
+        \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+        Setting & B & V & B & V & B & V \\
+        \midrule
+        \texttt{bfloat16} & \textbf{98.00} & 97.80 & 85.48 & \textbf{95.60} & 65.04 & \textbf{71.64} \\
+        All Linear, dynamic-token W8A8 & 96.04 & \textbf{96.28} & 77.00 & \textbf{91.40} & 63.44 & \textbf{66.88} \\
+        All Linear, static-tensor W8A8 & 1.52 & \textbf{79.40} & 0.00 & \textbf{75.32} & 2.76 & \textbf{56.04} \\
+        \texttt{down\_proj} only, static-tensor W8A8 & 2.16 & \textbf{79.28} & 0.04 & \textbf{79.08} & 3.40 & \textbf{56.84} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The retrieval results in Table~\ref{tab:activation_quantization_niah} show the same dependence on activation scaling. Dynamic per-token scaling preserves retrieval in both models. With static per-tensor scaling, the baseline falls to near-zero accuracy on all three tasks, whereas V-scale retains substantial retrieval capability. Quantizing only \texttt{down\_proj} nearly reproduces the all-Linear result. The contrast supports lower sensitivity to a fixed activation range in the MLP pathway. The unfavorable W4A16/YaRN cases in Table~\ref{tab:niah_single3_1b} involve a different combination of weight quantization and context extension, whose interaction with V-scale remains unresolved.
 
 \clearpage
 
