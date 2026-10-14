@@ -178,8 +178,8 @@ For a prescribed threshold $\tau>1$, token $s$ is called a $\tau$-gradient sink 
 	\includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
 	
 	\caption{
-		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, the first token consistently exhibits the strongest gradient concentration. Models include 0.1B and 1B baselines together with Qwen2.5-7B, Qwen3-8B, Llama-3.1-8B, and GLM-4-9B.
-	}\label{fig:gs-definition}
+		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, the first token consistently exhibits the strongest gradient concentration. Models include 0.1B and 1B baselines together with Qwen2.5-7B, Qwen3-8B, Llama-3.1-8B, and GLM-4-9B.}
+	\label{fig:gs-definition}
 \end{figure}
 
 In this work, we primarily report the continuous ratio $R_{GS}^{\ell}(s;T_e)$ rather than fixing a universal threshold $\tau$, since the meaningful scale of gradient concentration can depend on model size, layer, and measurement protocol. In the experiments below, we take $s=0$ and $T_e=31$.
@@ -202,7 +202,8 @@ To understand how this concentration is structured inside the attention block, w
 
     \caption{
     Token-wise gradient norms of query, key, and value across training checkpoints for the 1B model trained from scratch. Statistics are averaged over layers. Key and especially value gradients exhibit a pronounced spike at token 0, while query gradients remain comparatively flat.
-    }\label{fig:qkv_grads_over_tokens}
+    }
+    \label{fig:qkv_grads_over_tokens}
 \end{figure}
 
 Figure~\ref{fig:qkv_grads_over_tokens} reveals a clear and highly structured asymmetry. On the key and value pathways, the gradient norm exhibits a pronounced spike at the first token across checkpoints, after which it drops rapidly and remains relatively flat over most of the sequence. Moreover, the value-path spike is consistently larger than the key-side one. By contrast, the query pathway looks qualitatively different: its token-wise gradient profile is much flatter, and the first-token query gradient is exactly zero due to causal masking. For each pathway, the statistics are averaged over layers.
@@ -261,7 +262,7 @@ This section explains the mechanism behind the empirical patterns above, making 
 
 \begin{wrapfigure}[9]{r}{0.3\linewidth}
 	\centering
-    \vspace{-15pt}
+    \vspace{-20pt}
     \includegraphics[width=1\linewidth]{pics/as_motivation.pdf}\caption{Attention weights as two-way routers.}
     \label{fig:as_motivation}
 \end{wrapfigure}
@@ -373,7 +374,8 @@ We train V-scale models using the same data, optimizer, and model configurations
 
     \caption{
     Gradient sinks in the 0.3B baseline and V-scale models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. V-scale still leaves a visible gradient sink but reduces the concentration relative to the baseline.
-    }\label{fig:vscale-gs}
+    }
+    \label{fig:vscale-gs}
 \end{figure}
 
 \begin{figure}[tb]
@@ -394,7 +396,8 @@ We train V-scale models using the same data, optimizer, and model configurations
     From left to right: thresholded sink rate, residual-stream output norm, MLP output norm, and attention output norm.
     We compare the first token with the mean over the rest early tokens (positions 1--15).
     Across both scales, V-scale largely preserves attention sinks while reducing the activation norms of token 0, with the larger reduction appearing in MLP outputs. The backward-only control shows the same qualitative pattern.
-    }\label{fig:vscale_as_ma_compare}
+    }
+    \label{fig:vscale_as_ma_compare}
 \end{figure}
 
 \paragraph{Mechanism verification}
@@ -446,6 +449,7 @@ BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while Sm
     We directly compare the baseline (B) and V-scale (V) models under native-context evaluation and YaRN extension with a factor of $4$.
     Bold marks the better result within each baseline and V-scale pair under the same evaluation setting.
     }\label{tab:main_niah_multikey_1b}
+    \vspace{-5px}
     \begin{tabular}{l
         @{\hspace{6pt}}cc
         @{\hspace{6pt}}cc
@@ -478,20 +482,15 @@ BNB, GPTQ, and AWQ use W4A16 and leave runtime activations unquantized, while Sm
 \section{Conclusion}
 \label{sec:conclusion}
 
-In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation.
-Our empirical and theoretical results suggest a backward mechanism linking the two phenomena. Under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, and MA emerges as an adaptive regulator of this localized pressure in pre-norm Transformers.
-To test this hypothesis, we introduce V-scale, a value-path intervention that modulates backpropagated gradients, and a backward-only control that removes its direct forward-value change.
-The control retains substantial AS while suppressing MA, showing that backward modulation alone is sufficient for the predicted effect.
-V-scale also maintains comparable performance on standard language tasks and consistently improves multi-key retrieval across all tested context lengths and precision settings.
-
-Our findings motivate studying how sink-induced gradient regulation interacts with numerical precision during training~\cite{qiu2026flash}. A broader direction is to examine whether interventions on this mechanism preserve learning from limited context and experience, connecting to Transformer-based in-context learning as meta-learning~\cite{wu2025icl} and data-efficient agentic learning~\cite{wang2026deal}. These connections call for direct evaluations of few-shot learning and agent experience reuse.
+Our empirical and theoretical results suggest that, under causal masking, AS concentrates backward gradient pressure on sink tokens, with MA acting as an adaptive regulator in pre-norm Transformers.
+V-scale and its backward-only control support this mechanism: backward modulation alone suppresses MA while retaining substantial AS.
+V-scale maintains comparable language-task performance and improves multi-key retrieval across all tested context lengths and precision settings.
+Future work should examine interactions with training precision~\cite{qiu2026flash} and evaluate whether these interventions preserve few-shot in-context learning~\cite{wu2025icl} and agent experience reuse~\cite{wang2026deal}.
 
 \paragraph{Limitations}
-This work has some limitations.
-First, our study is restricted to Llama-like dense language models. It remains unclear whether and to what extent the same mechanism transfers to other settings, such as mixture-of-experts architectures or multimodal Transformers.
-Second, our analysis does not exclude other factors, such as data distribution, optimizer, or numerical precision, from shaping AS and MA during training.
-Third, retrieval performance depends on the task and quantization scheme. Some harder single-needle settings deteriorate under GPTQ or AWQ with YaRN extension, and the causes of these interactions remain unresolved.
-These limitations are left for future work.
+Our study covers Llama-like dense language models; transfer to mixture-of-experts or multimodal Transformers remains untested.
+Data distribution, optimizer, and numerical precision may also shape AS and MA.
+Retrieval gains depend on the task and quantization scheme: some harder single-needle settings deteriorate under GPTQ or AWQ with YaRN extension, for reasons that remain unresolved.
 
 \section*{Acknowledgements}
 
