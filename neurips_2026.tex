@@ -111,7 +111,7 @@ We introduce the notation needed for the empirical measurements and theoretical 
 In this paper, token positions are indexed by $t\in\{0,\dots,T-1\}$, and $\mathcal L$ denotes the training loss.
 
 \paragraph{Pre-norm Transformer and attention}
-We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs~\cite{touvron2023llama,zhang2019rmsnorm,su2021rope,shazeer2020gluvariants}.
+We study decoder-only Llama-like Transformers with pre-norm residual blocks, RMSNorm, RoPE positional encoding, and SwiGLU MLPs~\cite{touvron2023llama,zhang2019rmsnorm,su2021rope,shazeer2020gluvariants}. Figure~\ref{fig:architecture_gradient}(a) illustrates the forward computation.
 Let $H^\ell = (h_0^\ell,\dots,h_{T-1}^\ell)^\top \in \mathbb{R}^{T\times d_{\mathrm{model}}}$ denote the hidden states input to layer $\ell$.
 A pre-norm block updates the sequence as
 \[\begin{aligned}
@@ -123,6 +123,17 @@ A pre-norm block updates the sequence as
     H^{\ell+1} &= H^{\ell+\nicefrac12} + R^{\mathrm{mlp},\ell}.
 \end{aligned}\]
 We write $r_t^{\mathrm{attn},\ell}$ and $r_t^{\mathrm{mlp},\ell}$ for the $t$-th rows of $R^{\mathrm{attn},\ell}$ and $R^{\mathrm{mlp},\ell}$.
+
+\begin{figure}[tb]
+    \centering
+    \includegraphics[width=\linewidth]{pics/architecture_gradient.pdf}
+    \caption{
+    Pre-norm Transformer architecture, gradient measurements, and V-scale placement.
+    (a) Forward computation through the attention and MLP sublayers.
+    (b) Backward flow through the attention sublayer. The output gradient $g_1$ enters both the attention branch and the identity skip path. The branch gradient is $g_2$ at the RMSNorm output and $g_3$ after backpropagation through RMSNorm, giving the total input gradient $g_1+g_3$. The three ratios are defined in Section~\ref{sec:ma_grad_reshape}. Orange arrows indicate backward flow, and token indices are omitted.
+    (c) Expanded attention computation. Value paths 1 and 2 are alternatives for the baseline and V-scale models, respectively. V-scale acts after the value projection and before attention aggregation, as described in Section~\ref{sec:vscale}.
+    }\label{fig:architecture_gradient}
+\end{figure}
 
 The attention block can be either multi-head attention (MHA)~\cite{vaswani2017attention} or a variant such as grouped-query attention (GQA)~\cite{ainslie2023gqa}. For simplicity, we fix one layer $\ell$ and one attention head $h$, and suppress the layer/head superscripts unless needed. With RoPE, the query, key, and value states at token position $t$ are $q_t = R_t W_Q \widetilde h_t$, $k_t = R_t W_K \widetilde h_t$, and $v_t = W_V \widetilde h_t$, where $R_t\in\mathbb{R}^{d_{\mathrm{head}}\times d_{\mathrm{head}}}$ is the RoPE rotation matrix. The causal attention logits and weights are computed by $z_{tj}=\langle q_t,k_j\rangle/\sqrt{d_{\mathrm{head}}} + m_{tj}$ and $a_{tj}=\mathrm{softmax}(z_{t,:})_j$, where $m_{tj}=0$ for $j\le t$ and $m_{tj}=-\infty$ otherwise. Finally, the value aggregation and head output are $y_t = \sum\nolimits_{j\le t} a_{tj} v_j$ and $o_t = W_O y_t$, respectively.
 
@@ -212,7 +223,7 @@ These observations sharpen the empirical picture. Gradient sinks have a structur
 
 \subsection{Massive activations align with gradient reshaping}\label{sec:ma_grad_reshape}
 
-We next ask how the pre-norm blocks transmit the local gradients and how this reshaping relates to activation norms.
+We next ask how the pre-norm blocks transmit local gradients and how this reshaping relates to activation norms. Figure~\ref{fig:architecture_gradient}(b) marks the gradient locations used in the following measurements.
 In a pre-norm attention block, the forward computation follows $h_t^\ell \mapsto \widetilde h_t^\ell \mapsto r_t^{\mathrm{attn},\ell}$ through RMSNorm and attention, followed by the residual addition $h_t^{\ell+\nicefrac12} = h_t^\ell + r_t^{\mathrm{attn},\ell}$. For a fixed layer and token, let $g_1 = \nabla_{h_t^{\ell+\nicefrac12}}\mathcal{L} = \nabla_{r_t^{\mathrm{attn},\ell}}\mathcal{L}$ denote the gradient arriving at this addition, and let $g_2 = \nabla_{\widetilde h_t^\ell}\mathcal{L}$ denote the gradient at the normalized attention input. Backpropagation through RMSNorm produces the branch contribution $g_3 = J_{\mathrm{RMSNorm}}(h_t^\ell)^\top g_2 = \nabla_{h_t^\ell}\mathcal{L} - g_1$. The skip path carries $g_1$ unchanged, so the total input gradient is $g_1+g_3$.
 
 We measure three stages of this backward flow. $\mathrm{Bloat}$ measures amplification through the attention branch from $g_1$ to $g_2$. $\mathrm{Change}$ measures the net change in residual-stream gradient norm after the branch contribution is added. $\mathrm{Compress}$ measures the norm gain through RMSNorm from $g_2$ to $g_3$, with values below one indicating attenuation.
@@ -311,7 +322,18 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \section{Mechanistic Intervention and Validation}
 \label{sec:vscale}
 
-The previous sections predict that relieving localized gradient pressure during training should weaken MA while retaining attention sinks. We introduce V-scale to test this prediction and use a backward-only control to isolate the effect of gradient modulation. Matched pretraining runs allow us to test how this intervention changes the emergence of MA during optimization. We then evaluate V-scale on language modeling and long-context retrieval.
+Figure~\ref{fig:mechanism_overview} summarizes the proposed connection between attention sinks, gradient sinks, and massive activations, together with the V-scale intervention used to test it. The key ingredients are attention routing and the scale sensitivity of RMSNorm. We present the main identities and bounds here, with the full theory and proofs deferred to Appendix~\ref{app:theory}.
+
+The previous sections predict that relieving localized gradient pressure during training should weaken MA while retaining attention sinks. We introduce V-scale to test this prediction, as outlined in Figure~\ref{fig:mechanism_overview}, and use a backward-only control to isolate the effect of gradient modulation. Matched pretraining runs allow us to test how this intervention changes the emergence of MA during optimization. We then evaluate V-scale on language modeling and long-context retrieval.
+
+\begin{wrapfigure}[34]{r}{0.5\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{pics/mechanism.pdf}
+    \caption{
+    Overview of the proposed mechanism and its intervention test.
+    Attention sinks aggregate value-path gradients at the sink token, creating localized gradient pressure. Large residual activations attenuate gradient transmission through RMSNorm, allowing strong amplification within the attention branch to coexist with a mild change in residual-stream gradient norm. V-scale attenuates sink-token value-path gradients and suppresses massive activations during training while retaining attention sinks. RMSNorm remains active under the intervention. Insets summarize the gradient-reshaping measurements in Figure~\ref{fig:attn_scatter_main} and the activation comparison in Figure~\ref{fig:vscale_as_ma_compare}.
+    }\label{fig:mechanism_overview}
+\end{wrapfigure}
 
 The value path is the natural target channel to regulate gradients for three reasons.
 First, modifying only value states does not affect the attention weights that depend only on $Q$ and $K$.
@@ -330,14 +352,15 @@ For each attention head, after the standard value projection and before value ag
 \quad
 \hat y_t = \sum\nolimits_{j\le t} a_{tj} \hat v_j,
 \]
-where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, as illustrated in Figure~\ref{fig:architecture}.
+where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, shown as value path 2 in Figure~\ref{fig:architecture_gradient}(c).
 
-\begin{wrapfigure}[12]{r}{0.36\linewidth}
-	\centering
-	\vspace{-10pt}
-	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
-	\label{fig:architecture}
-\end{wrapfigure}
+% Superseded by Figure~\ref{fig:architecture_gradient}(c).
+% \begin{wrapfigure}[12]{r}{0.36\linewidth}
+% 	\centering
+% 	\vspace{-10pt}
+% 	\includegraphics[width=1\linewidth]{pics/vscale_architecture.pdf}\caption{Schematic of V-scale inside a pre-norm Transformer block.}
+% 	\label{fig:architecture}
+% \end{wrapfigure}
 
 In practice we use a reparameterization $C_{\ell,h} = d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2\lambda^{\ell,h}$, where $\sigma=0.02$ is the initialization standard deviation used for the value projection in our \texttt{LlamaForCausalLM} baselines. This scale matches the typical value norm at initialization. After RMSNorm, $\|\widetilde h\|_2^2$ is on the order of $d_{\mathrm{model}}$, so a value projection with entrywise variance $\sigma^2$ gives $\mathbb{E}\|v\|_2^2$ on the order of $d_{\mathrm{model}} \cdot d_{\mathrm{head}} \cdot \sigma^2$. We learn the positive factor as $\lambda^{\ell,h}=\exp(\theta_{\ell,h})$ with $\theta_{\ell,h}$ initialized to $0$. This introduces only one parameter per layer and per head, which is negligible relative to the total parameter count. The backward behavior of V-scale is mathematically explicit:
 
@@ -1421,74 +1444,76 @@ Our experiments rely on several publicly available datasets, models, tokenizers,
 \fi
 \makeatother
 
-\clearpage
-
-\section{Pre-Norm Transformer Architecture}
-\label{app:prenorm_architecture}
-
-For completeness, Figure~\ref{fig:prenorm_architecture} illustrates the standard pre-norm Transformer architecture underlying the setup in Section~2. Each Transformer block contains an attention sublayer followed by an MLP sublayer. In both cases, RMSNorm is applied before the corresponding transformation, and the sublayer output is added back to the residual stream.
-
-Given the input hidden states \(H^\ell\), the attention sublayer is written as
-\begin{equation}
-	\widetilde{H}^{\ell}
-	=
-	\operatorname{RMSNorm}(H^\ell),
-	\qquad
-	H^{\ell+\frac{1}{2}}
-	=
-	H^\ell
-	+
-	\operatorname{Attention}
-	\bigl(\widetilde{H}^{\ell}\bigr).
-\end{equation}
-The subsequent MLP sublayer is
-\begin{equation}
-	\widetilde{H}^{\ell+\frac{1}{2}}
-	=
-	\operatorname{RMSNorm}
-	\bigl(H^{\ell+\frac{1}{2}}\bigr),
-	\qquad
-	H^{\ell+1}
-	=
-	H^{\ell+\frac{1}{2}}
-	+
-	\operatorname{MLP}
-	\bigl(\widetilde{H}^{\ell+\frac{1}{2}}\bigr).
-\end{equation}
-
-Within the attention sublayer, the normalized hidden states are projected into query, key, and value states. RoPE is applied to the query and key states before scaled dot-product attention, whereas the value states are passed directly to attention aggregation. The resulting attention output is projected by \(W_O\) and added to the residual stream.
-
-\begin{figure}[ht]
-	\centering
-	\includegraphics[width=0.68\textwidth]{pics/Quanming/pre-norm}
-	\caption{
-		Architecture of a standard pre-norm Transformer block.
-		RMSNorm is applied before both the attention and MLP sublayers,
-		and each sublayer is connected to the residual stream through an
-		identity skip connection. In the attention sublayer, the normalized
-		hidden states are projected into query, key, and value states before
-		attention aggregation.
-	}
-	\label{fig:prenorm_architecture}
-\end{figure}
-
-This architecture also clarifies the location of V-scale in
-Figure~\ref{fig:architecture}. Relative to the standard block in
-Figure~\ref{fig:prenorm_architecture}, V-scale introduces an additional
-transformation on the value path after the \(W_V\) projection and before
-attention aggregation. It does not directly modify the query or key
-projections, and therefore does not directly alter the attention logits
-computed from \(Q\) and \(K\) for fixed input hidden states. It does,
-however, transform the value states used in the forward aggregation and
-the gradients propagated backward through the value path.
-
-The pre-norm placement of RMSNorm is central to our analysis. Although
-the attention and MLP sublayers operate on normalized inputs, the norm of
-the residual-stream state still affects backpropagation through the
-RMSNorm Jacobian. Consequently, unusually large residual activations can
-substantially attenuate the gradient transmitted to earlier layers,
-while having a more limited direct effect on the normalized forward
-representation.
-
+% Architecture material retained below for reference and consolidated into the main-text figure.
+% \clearpage
+%
+% \section{Pre-Norm Transformer Architecture}
+% \label{app:prenorm_architecture}
+%
+% For completeness, Figure~\ref{fig:prenorm_architecture} illustrates the standard pre-norm Transformer architecture underlying the setup in Section~2. Each Transformer block contains an attention sublayer followed by an MLP sublayer. In both cases, RMSNorm is applied before the corresponding transformation, and the sublayer output is added back to the residual stream.
+%
+% Given the input hidden states \(H^\ell\), the attention sublayer is written as
+% \begin{equation}
+% 	\widetilde{H}^{\ell}
+% 	=
+% 	\operatorname{RMSNorm}(H^\ell),
+% 	\qquad
+% 	H^{\ell+\frac{1}{2}}
+% 	=
+% 	H^\ell
+% 	+
+% 	\operatorname{Attention}
+% 	\bigl(\widetilde{H}^{\ell}\bigr).
+% \end{equation}
+% The subsequent MLP sublayer is
+% \begin{equation}
+% 	\widetilde{H}^{\ell+\frac{1}{2}}
+% 	=
+% 	\operatorname{RMSNorm}
+% 	\bigl(H^{\ell+\frac{1}{2}}\bigr),
+% 	\qquad
+% 	H^{\ell+1}
+% 	=
+% 	H^{\ell+\frac{1}{2}}
+% 	+
+% 	\operatorname{MLP}
+% 	\bigl(\widetilde{H}^{\ell+\frac{1}{2}}\bigr).
+% \end{equation}
+%
+% Within the attention sublayer, the normalized hidden states are projected into query, key, and value states. RoPE is applied to the query and key states before scaled dot-product attention, whereas the value states are passed directly to attention aggregation. The resulting attention output is projected by \(W_O\) and added to the residual stream.
+%
+% \begin{figure}[ht]
+% 	\centering
+% 	\includegraphics[width=0.68\textwidth]{pics/Quanming/pre-norm}
+% 	\caption{
+% 		Architecture of a standard pre-norm Transformer block.
+% 		RMSNorm is applied before both the attention and MLP sublayers,
+% 		and each sublayer is connected to the residual stream through an
+% 		identity skip connection. In the attention sublayer, the normalized
+% 		hidden states are projected into query, key, and value states before
+% 		attention aggregation.
+% 	}
+% 	\label{fig:prenorm_architecture}
+% \end{figure}
+%
+% This architecture also clarifies the location of V-scale in
+% Figure~\ref{fig:architecture}. Relative to the standard block in
+% Figure~\ref{fig:prenorm_architecture}, V-scale introduces an additional
+% transformation on the value path after the \(W_V\) projection and before
+% attention aggregation. It does not directly modify the query or key
+% projections, and therefore does not directly alter the attention logits
+% computed from \(Q\) and \(K\) for fixed input hidden states. It does,
+% however, transform the value states used in the forward aggregation and
+% the gradients propagated backward through the value path.
+%
+% The pre-norm placement of RMSNorm is central to our analysis. Although
+% the attention and MLP sublayers operate on normalized inputs, the norm of
+% the residual-stream state still affects backpropagation through the
+% RMSNorm Jacobian. Consequently, unusually large residual activations can
+% substantially attenuate the gradient transmitted to earlier layers,
+% while having a more limited direct effect on the normalized forward
+% representation.
+%
+%
 
 \end{document}
