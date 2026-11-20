@@ -303,16 +303,7 @@ Combining this with Proposition~\ref{prop:v_agg_main} and Theorem~\ref{thm:v_sec
 \section{Mechanistic Intervention and Validation}
 \label{sec:vscale}
 
-\begin{wrapfigure}[22]{r}{0.5\linewidth}
-	\centering
-    \vspace{-10px}
-	\includegraphics[width=1\linewidth]{pics/mechanism.pdf}
-    \vspace{-10px}
-	\caption{
-		Mechanism and intervention.
-		MA attenuates sink-induced gradient pressure through RMSNorm. V-scale provides an additional value-path gradient valve, reducing reliance on MA.
-	}\label{fig:mechanism_overview}
-\end{wrapfigure}
+
 
 The proposed mechanism predicts that relieving localized gradient pressure should weaken MA while retaining AS. We test this prediction with V-scale and a backward-only control in matched pretraining runs, then evaluate language modeling and long-context retrieval. Figure~\ref{fig:mechanism_overview} summarizes the mechanism and intervention rationale.
 
@@ -321,6 +312,8 @@ First, modifying only value states does not affect the attention weights that de
 Second, our observations in Section~\ref{sec:as_to_gs} confirm that value-path gradient norms of the sink token are several times larger than key-path ones. 
 Third, prior studies have repeatedly reported that sink tokens tend to have unusually small value norms~\cite{guo2025activedormant,su2025kvsink,bu2025valuestategated}.
 We observe the same pattern in our models, motivating a radial transform that uses $\|v\|_2$ to target sink tokens.
+
+
 
 \subsection{V-scale: a value-path gradient valve}
 
@@ -334,6 +327,17 @@ For each attention head, after the standard value projection and before value ag
 \]
 where $C>0$ is a scale parameter. We call this modification \emph{V-scale}, shown as value path 2 in Figure~\ref{fig:architecture_gradient}~(c).
 We parameterize $C_{\ell,h}=d_{\mathrm{model}}\cdot d_{\mathrm{head}}\cdot\sigma^2\exp(\theta_{\ell,h})$, where $\sigma=0.02$ is the value-projection initialization standard deviation and $\theta_{\ell,h}$ starts at $0$. This adds one learned parameter per layer and head and matches the typical squared value norm at initialization (see Appendix~\ref{app:theory:vscale}). The backward behavior of V-scale is explicit:
+
+\begin{wrapfigure}[22]{r}{0.5\linewidth}
+	\centering
+	\vspace{-20px}
+	\includegraphics[width=1\linewidth]{pics/mechanism.pdf}
+	\vspace{-10px}
+	\caption{Mechanism and intervention.
+		MA attenuates sink-induced gradient pressure through RMSNorm. 
+		V-scale provides an additional value-path gradient valve, reducing reliance on MA.}
+	\label{fig:mechanism_overview}
+\end{wrapfigure}
 
 \begin{proposition}[Jacobian spectrum of V-scale]\label{prop:vscale_valve_main}
 Let $r=\|v\|_2^2$ and $\hat v=\phi(r)v$ with $\phi(r)=\frac{r}{r+C}$.
