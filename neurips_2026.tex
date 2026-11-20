@@ -111,6 +111,7 @@ We write $r_t^{\mathrm{attn},\ell}$ and $r_t^{\mathrm{mlp},\ell}$ for the $t$-th
     \centering
     \includegraphics[width=\linewidth]{pics/architecture_gradient.pdf}
     
+    \vspace{-10px}
     \caption{
     Pre-norm Transformer architecture, gradient measurements, and V-scale placement.
     (a) Forward computation through the attention and MLP sublayers.
@@ -172,14 +173,17 @@ For a prescribed threshold $\tau>1$, token $s$ is called a $\tau$-gradient sink 
 	\includegraphics[width=0.48\textwidth]{pics/Llama_3__1_8B/violin.pdf}
 	\includegraphics[width=0.48\textwidth]{pics/GLM_4_9B/violin.pdf}
 	
-	\caption{
-		Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, the first token consistently exhibits the strongest gradient concentration. Models include 0.1B and 1B baselines together with Qwen2.5-7B, Qwen3-8B, Llama-3.1-8B, and GLM-4-9B.}
+	\caption{Gradient sinks across models. Each panel plots the token-wise distribution of $\log_{10}\|\nabla_{\widetilde h_t^{\ell}}\mathcal L\|_2$ at the post-RMSNorm attention input. Token 0 is highlighted. The reported median and interquartile range (IQR) of $R_{GS}^{\ell}(0)$ summarize how much larger the gradient on token 0 is than the mean over positions 1--31. Across both scratch-trained baselines and pretrained models, the first token consistently exhibits the strongest gradient concentration. Models include 0.1B and 1B baselines together with Qwen2.5-7B, Qwen3-8B, Llama-3.1-8B, and GLM-4-9B.}
+	\vspace{-5px}
 	\label{fig:gs-definition}
 \end{figure}
 
 In this work, we primarily report the continuous ratio $R_{GS}^{\ell}(s;T_e)$ rather than fixing a universal threshold $\tau$, since the meaningful scale of gradient concentration can depend on model size, layer, and measurement protocol. In the experiments below, we take $s=0$ and $T_e=31$.
-Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, making the comparison reflect the effective training signal seen by the optimizer.
-For scratch-trained baselines, we use the corresponding batch size and context length specified in Appendix~\ref{app:config}; for pretrained models, we use a diagnostic batch of 512 packed sequences with context length 2048. Note that for pretrained models, these gradients should be interpreted as post-hoc diagnostic probes rather than the exact gradients from their official training runs.
+Gradients are first aggregated over the full batch as in one optimization step and then converted to token-wise $\ell_2$ norms, 
+making the comparison reflect the effective training signal seen by the optimizer.
+For scratch-trained baselines, we use the corresponding batch size and context length specified in Appendix~\ref{app:config}; for pretrained models, we use a diagnostic batch of 512 packed sequences with context length 2048. 
+Note that for pretrained models, 
+these gradients should be interpreted as post-hoc diagnostic probes rather than the exact gradients from their official training runs.
 
 
 
@@ -188,7 +192,7 @@ Gradient sinks therefore appear as a common empirical pattern during the trainin
 
 To understand how this concentration is structured inside the attention block, we further decompose the gradients into query, key, and value pathways and track their token-wise norms across training checkpoints. For each token $s$, the incoming gradient splits as $\nabla_{\widetilde h_s^\ell}\mathcal{L} = W_Q^\top \nabla_{q_s^\ell}\mathcal{L} + W_K^\top \nabla_{k_s^\ell}\mathcal{L} + W_V^\top \nabla_{v_s^\ell}\mathcal{L}$, so the observed token-wise concentration can be examined pathway by pathway.
 
-\begin{figure}[tb]
+\begin{figure}[t]
     \centering
     \includegraphics[width=0.3\textwidth]{pics/1B_baseline/LINE_Dq_over_tokens.pdf}
     \includegraphics[width=0.3\textwidth]{pics/1B_baseline/LINE_Dk_over_tokens.pdf}
@@ -480,11 +484,16 @@ To examine sensitivity to activation range more directly, we compare symmetric W
 \label{sec:conclusion}
 
 In this work, we revisit the relationship between attention sinks and massive activations from the perspective of backpropagation empirically and theoretically.
-Under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, and MA emerges as an adaptive regulator of this localized pressure in pre-norm Transformers.
-To test this hypothesis, we introduce V-scale, a value-path intervention that modulates backpropagated gradients, and a backward-only control that removes its direct forward-value change.
-Across model sizes, we find that V-scale preserves AS but substantially suppresses MA, illustrating that the two phenomena can be separated once gradient sinks are controlled.
-The control retains substantial AS while suppressing MA, showing that backward modulation alone is sufficient for the predicted effect.
-On downstream tasks, V-scale remains comparable to the baseline on standard evaluations and improves multi-key retrieval across all tested context lengths and precision settings.
+Under causal masking, AS can induce concentrated gradient pressure on the sink token, forming gradient sinks, 
+and MA emerges as an adaptive regulator of this localized pressure in pre-norm Transformers.
+To test this hypothesis, we introduce V-scale, a value-path intervention that modulates backpropagated gradients, 
+and a backward-only control that removes its direct forward-value change.
+Across model sizes, we find that V-scale preserves AS but substantially suppresses MA, 
+illustrating that the two phenomena can be separated once gradient sinks are controlled.
+The control retains substantial AS while suppressing MA, 
+showing that backward modulation alone is sufficient for the predicted effect.
+On downstream tasks, 
+V-scale remains comparable to the baseline on standard evaluations and improves multi-key retrieval across all tested context lengths and precision settings.
 
 Our findings motivate studying how sink-induced gradient regulation interacts with numerical precision during training~\cite{qiu2026flash}. A broader direction is to examine whether interventions on this mechanism preserve in-context learning~\cite{wu2025icl} and data-efficient agentic learning~\cite{wang2026deal}. These connections call for direct evaluations of few-shot learning and agent experience reuse.
 
@@ -496,7 +505,6 @@ This work has some limitations. First, our study is restricted to Llama-like den
 Q. Yao is sponsored by Beijing Nova Program.
 Z. Lin was supported by the NSF China (No. 62276004), the Beijing Natural Science Foundation (No. L257007), and the Beijing Major Science and Technology Project (No. Z251100008425006).
 
-\clearpage
 \bibliographystyle{abbrvnat}
 \bibliography{neurips_2026}
 
